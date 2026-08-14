@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Git History Viewer</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header>
+    <div><strong id="repo">Git History</strong><span id="branch"></span></div>
+    <div class="actions"><input id="search" type="search" placeholder="Search commits" aria-label="Search commits"><button id="theme" type="button" aria-label="Toggle theme">◐</button></div>
+  </header>
+  <main>
+    <section class="history" aria-label="Commit history"><div id="notice"></div><div id="commits"></div></section>
+    <aside id="detail"><p class="muted">Select a commit to inspect it.</p></aside>
+  </main>
+</body>
+</html>

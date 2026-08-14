@@ -1,0 +1,6 @@
+interface:
+  display_name: "Git History Viewer"
+  short_description: "安全なローカルGit履歴ビューアとMCP"
+  default_prompt: "Use $git-history-viewer to inspect the current repository history without modifying or fetching it."
+policy:
+  allow_implicit_invocation: true
