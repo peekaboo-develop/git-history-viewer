@@ -1,6 +1,6 @@
 import { ViewerError } from '../core/errors.js';
 import type { AiEvidenceSummary, AiExplanation } from '../schema/types.js';
-import { AI_OUTPUT_SCHEMA, AI_PROMPT_VERSION, AI_SYSTEM_PROMPT, validateExplanation } from './ollama.js';
+import { AI_OUTPUT_SCHEMA, AI_PROMPT_VERSION, AI_SYSTEM_PROMPT, validateExplanation } from './explanation-schema.js';
 import type { AiProvider, AiProviderDescriptor } from './provider.js';
 
 const ENDPOINT = 'https://api.openai.com/v1/responses';

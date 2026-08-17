@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { FileAiCache, aiCacheKey, digestAiInput, type AiCacheRequest } from './cache.js';
 import { buildAiEvidence, type BuiltAiEvidence } from './evidence.js';
-import { AI_PROMPT_VERSION, validateExplanation } from './ollama.js';
+import { AI_PROMPT_VERSION, validateExplanation } from './explanation-schema.js';
 import type { AiProvider, AiProviderDescriptor } from './provider.js';
 import { ViewerError } from '../core/errors.js';
 import type { RepositoryReader } from '../core/repository.js';

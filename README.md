@@ -23,7 +23,7 @@ The default MCP policy does not expose patches, author emails, or absolute paths
 
 The Web header includes an **AI接続** guide for verified Codex, Claude Code, and Cursor MCP setup templates. It never edits a client configuration or exposes the repository's absolute path. A selected commit can produce a short MCP prompt containing only its OID.
 
-The optional Web AI flow is disabled unless an `--ai-profile` or the legacy `--ollama-model` option is supplied. Profiles support numeric-loopback Ollama and the official OpenAI Responses API. Both preview the exact metadata payload and require a second click before generation. When multiple profiles are enabled, the detail pane provides a model selector. OpenAI uses only the fixed `https://api.openai.com/v1/responses` endpoint and reads `OPENAI_API_KEY` at process startup; the key is never accepted from the browser or config file. Loopback does not by itself prove where Ollama executes a model. Patches, file contents, identities, absolute paths, refs, remotes, and commit IDs are not sent.
+The optional Web AI flow is disabled unless an `--ai-profile` or the legacy `--ollama-model` option is supplied. Profiles support numeric-loopback Ollama, the official OpenAI Responses API, and the official Anthropic Messages API. Every provider previews the exact metadata payload and requires a second click before generation. When multiple profiles are enabled, the detail pane provides a model selector. Remote endpoints and credential names are fixed in code: OpenAI reads `OPENAI_API_KEY`, while Anthropic reads `ANTHROPIC_API_KEY`. Keys are never accepted from the browser or config file. Loopback does not by itself prove where Ollama executes a model. Patches, file contents, identities, absolute paths, refs, remotes, and commit IDs are not sent.
 
 The config path is OS-specific and printed by `config path`. The strict JSON format stores no credentials, arbitrary endpoints, prompts, or environment-variable names:
 
@@ -46,12 +46,19 @@ The config path is OS-specific and printed by `config path`. The strict JSON for
       "provider": "openai",
       "model": "gpt-5.4-mini",
       "maxOutputTokens": 1536
+    },
+    {
+      "id": "claude-balanced",
+      "label": "Claude balanced",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "maxOutputTokens": 1536
     }
   ]
 }
 ```
 
-Config changes require a restart. `--ai-profile` is repeatable and is the explicit allowlist for that Web session. Export `OPENAI_API_KEY` before startup only when selecting an OpenAI profile.
+Config changes require a restart. `--ai-profile` is repeatable and is the explicit allowlist for that Web session. Export the corresponding fixed key only when selecting a remote profile.
 
 The AI-result cache uses bounded, sharded JSON files in the operating system's user cache directory. Cache metadata stores no API keys, raw prompts, diffs, repository paths, or remote URLs; generated results may still repeat sensitive source text. `--no-ai-cache` bypasses reads and writes. `cache clear` removes only recognized cache-entry files.
 

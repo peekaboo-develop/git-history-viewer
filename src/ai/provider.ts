@@ -1,6 +1,6 @@
 import type { AiEvidenceSummary, AiExplanation } from '../schema/types.js';
 
-export type AiProviderId = 'ollama' | 'openai';
+export type AiProviderId = 'ollama' | 'openai' | 'anthropic';
 
 export interface AiProviderDescriptor {
   profileId: string;

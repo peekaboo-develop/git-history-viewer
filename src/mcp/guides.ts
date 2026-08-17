@@ -1,4 +1,4 @@
-import { AI_OUTPUT_SCHEMA } from '../ai/ollama.js';
+import { AI_OUTPUT_SCHEMA } from '../ai/explanation-schema.js';
 
 export const MCP_GUIDE_VERSION = '1';
 export const MCP_GUIDE_VERIFIED_AT = '2026-08-17';

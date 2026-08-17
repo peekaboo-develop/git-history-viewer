@@ -3,6 +3,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { AnthropicProvider } from '../src/ai/anthropic.js';
 import { FileAiCache } from '../src/ai/cache.js';
 import { buildAiEvidence } from '../src/ai/evidence.js';
 import { OllamaProvider } from '../src/ai/ollama.js';
@@ -10,6 +11,7 @@ import { OpenAiProvider } from '../src/ai/openai.js';
 import { AiServiceRegistry } from '../src/ai/registry.js';
 import { AiExplanationService } from '../src/ai/service.js';
 import type { AiProvider } from '../src/ai/provider.js';
+import { ViewerError } from '../src/core/errors.js';
 import { openRepository } from '../src/core/repository.js';
 import { fixture, git } from './fixture.js';
 
@@ -97,4 +99,34 @@ test('OpenAI provider rejects incomplete responses and refusals', async () => {
   const evidence = { subject: 'test', body: '', comparison: 'root' as const, changes: [] };
   await assert.rejects(new OpenAiProvider({ ...base, fetchImpl: response({ status: 'incomplete', output: [] }) }).generate(evidence), /incomplete/u);
   await assert.rejects(new OpenAiProvider({ ...base, fetchImpl: response({ status: 'completed', output: [{ type: 'message', content: [{ type: 'refusal', refusal: 'no' }] }] }) }).generate(evidence), /refused/u);
+});
+
+test('Anthropic provider uses fixed Messages API contract and performs no preview network call', async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+    calls.push({ url: String(input), ...(init ? { init } : {}) });
+    return new Response(JSON.stringify({ type: 'message', role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(explanation) }] }));
+  }) as typeof fetch;
+  const provider = new AnthropicProvider({ profileId: 'claude-test', label: 'Claude test', model: 'claude-sonnet-4-6', apiKey: 'sk-ant-test-secret', fetchImpl });
+  assert.equal(await provider.cacheIdentity(), 'anthropic-messages-2023-06-01-v1:claude-sonnet-4-6'); assert.equal(calls.length, 0);
+  const evidence = { subject: 'test', body: '', comparison: 'first-parent' as const, changes: [{ state: 'A', path: 'unsafe.txt', oldPath: null, added: 1, deleted: 0 }] };
+  const result = await provider.generate(evidence); assert.equal(result.summaryJa, '変更の要約'); assert.equal(calls[0]?.url, 'https://api.anthropic.com/v1/messages');
+  const headers = calls[0]?.init?.headers as Record<string, string>; assert.equal(headers['x-api-key'], 'sk-ant-test-secret'); assert.equal(headers['anthropic-version'], '2023-06-01');
+  const request = JSON.parse(String(calls[0]?.init?.body)) as Record<string, unknown>; assert.equal(typeof request.system, 'string'); assert.equal(Object.hasOwn(request, 'tools'), false); assert.doesNotMatch(JSON.stringify(request), /sk-ant-test-secret/u);
+  assert.deepEqual((provider.canonicalRequest(evidence, 'identity') as { request: unknown }).request, request);
+});
+
+test('Anthropic provider rejects stop reasons and unexpected content', async () => {
+  const response = (value: unknown) => (async () => new Response(JSON.stringify(value))) as typeof fetch;
+  const base = { profileId: 'claude-test', label: 'Claude test', model: 'claude-sonnet-4-6', apiKey: 'sk-ant-test-secret' };
+  const evidence = { subject: 'test', body: '', comparison: 'root' as const, changes: [] };
+  for (const reason of ['max_tokens', 'model_context_window_exceeded']) await assert.rejects(new AnthropicProvider({ ...base, fetchImpl: response({ type: 'message', role: 'assistant', stop_reason: reason, content: [] }) }).generate(evidence), (error: unknown) => error instanceof ViewerError && error.code === 'PROVIDER_OUTPUT_LIMIT');
+  for (const reason of ['refusal', 'tool_use', 'pause_turn', 'stop_sequence']) await assert.rejects(new AnthropicProvider({ ...base, fetchImpl: response({ type: 'message', role: 'assistant', stop_reason: reason, content: [{ type: 'text', text: 'no' }] }) }).generate(evidence), (error: unknown) => error instanceof ViewerError && error.code === 'PROVIDER_OUTPUT_INVALID');
+  await assert.rejects(new AnthropicProvider({ ...base, fetchImpl: response({ type: 'message', role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: '{}' }, { type: 'text', text: '{}' }] }) }).generate(evidence), /unexpected content/u);
+});
+
+test('Anthropic provider classifies HTTP failures without exposing response bodies', async () => {
+  const base = { profileId: 'claude-test', label: 'Claude test', model: 'claude-sonnet-4-6', apiKey: 'sk-ant-test-secret' }; const evidence = { subject: 'test', body: '', comparison: 'root' as const, changes: [] };
+  const expected: Array<[number, string, boolean]> = [[400, 'PROVIDER_UNAVAILABLE', false], [401, 'PROVIDER_UNAVAILABLE', false], [404, 'PROVIDER_MODEL_NOT_FOUND', false], [408, 'PROVIDER_TIMEOUT', true], [413, 'OUTPUT_LIMIT', false], [429, 'PROVIDER_UNAVAILABLE', true], [529, 'PROVIDER_UNAVAILABLE', true]];
+  for (const [status, code, retryable] of expected) await assert.rejects(new AnthropicProvider({ ...base, fetchImpl: (async () => new Response('secret provider body', { status })) as typeof fetch }).generate(evidence), (error: unknown) => error instanceof ViewerError && error.code === code && error.retryable === retryable && !error.message.includes('secret provider body'));
 });
