@@ -22,4 +22,6 @@ test('web server binds loopback and enforces session, host, origin, and method',
   assert.equal((await request(port, '/api/v1/repository', { headers: { Cookie: session, Origin: 'https://evil.test' } })).status, 403);
   assert.equal((await request(port, '/', { method: 'POST', headers: { Cookie: session } })).status, 405);
   const page = await request(port, '/', { headers: { Cookie: session } }); assert.equal(page.status, 200); assert.match(String(page.headers['content-security-policy'] ?? ''), /frame-ancestors 'none'/u);
+  const topology = await request(port, '/topology.js', { headers: { Cookie: session } });
+  assert.equal(topology.status, 200); assert.match(topology.body, /buildTopology/u); assert.doesNotMatch(topology.body, /innerHTML/u);
 });

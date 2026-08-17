@@ -51,8 +51,10 @@ export async function createViewerServer(reader: RepositoryReader, options: View
     return versionPromise;
   };
   const staticRoutes = new Map<string, readonly [string, string]>([
-    ['/', ['index.html', 'text/html; charset=utf-8']], ['/app.js', ['app.js', 'text/javascript; charset=utf-8']],
-    ['/styles.css', ['styles.css', 'text/css; charset=utf-8']],
+    ['/', [path.join(publicRoot, 'index.html'), 'text/html; charset=utf-8']],
+    ['/app.js', [path.join(publicRoot, 'app.js'), 'text/javascript; charset=utf-8']],
+    ['/styles.css', [path.join(publicRoot, 'styles.css'), 'text/css; charset=utf-8']],
+    ['/topology.js', [fileURLToPath(new URL('./topology.js', import.meta.url)), 'text/javascript; charset=utf-8']],
   ] as const);
 
   const server = http.createServer(async (request, response) => {
@@ -88,7 +90,7 @@ export async function createViewerServer(reader: RepositoryReader, options: View
       const commit = url.pathname.match(/^\/api\/v1\/commits\/([0-9a-f]+)$/u);
       if (commit) return json(await reader.commit(commit[1] ?? ''));
       const asset = staticRoutes.get(url.pathname);
-      if (asset) return send(response, 200, await readFile(path.join(publicRoot, asset[0])), asset[1]);
+      if (asset) return send(response, 200, await readFile(asset[0]), asset[1]);
       return send(response, 404, 'Not found.');
     } catch (error) {
       const known = asViewerError(error);

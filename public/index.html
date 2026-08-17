@@ -6,15 +6,31 @@
   <meta name="color-scheme" content="light dark">
   <title>Git History Viewer</title>
   <link rel="stylesheet" href="/styles.css">
-  <script src="/app.js" defer></script>
+  <script src="/app.js" type="module"></script>
 </head>
 <body>
   <header>
-    <div><strong id="repo">Git History</strong><span id="branch"></span></div>
-    <div class="actions"><input id="search" type="search" placeholder="Search commits" aria-label="Search commits"><button id="theme" type="button" aria-label="Toggle theme">◐</button></div>
+    <div class="identity"><strong id="repo">Git History</strong><span id="branch"></span></div>
+    <nav class="view-switcher" aria-label="History view">
+      <button id="commits-tab" class="view-tab active" type="button" aria-selected="true">Commits</button>
+      <button id="topology-tab" class="view-tab" type="button" aria-selected="false">Topology</button>
+    </nav>
+    <div class="actions"><input id="search" type="search" placeholder="Search commits" aria-label="Search commits"><button id="theme" type="button" aria-label="Toggle theme" title="Toggle theme">◐</button></div>
   </header>
   <main>
-    <section class="history" aria-label="Commit history"><div id="notice"></div><div id="commits"></div></section>
+    <section class="history" aria-label="Repository history">
+      <div id="notice"></div>
+      <div id="commits" aria-label="Commit list"></div>
+      <div id="topology" hidden aria-label="Branch topology">
+        <div class="topology-heading">
+          <div><strong>Repository topology</strong><span id="topology-summary"></span></div>
+          <p>Linear commit runs are folded. Cards represent branch tips, tags, worktrees, roots, and merges.</p>
+        </div>
+        <div id="topology-scroll" tabindex="0" aria-label="Scrollable repository topology">
+          <div id="topology-canvas"><svg id="topology-edges" aria-hidden="true"></svg><div id="topology-nodes"></div></div>
+        </div>
+      </div>
+    </section>
     <aside id="detail"><p class="muted">Select a commit to inspect it.</p></aside>
   </main>
 </body>

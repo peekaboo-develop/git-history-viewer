@@ -22,6 +22,7 @@ The product does not mutate a repository, contact remotes, or send repository co
 ### Version 0.1
 
 - Topological commit graph with branches, remote-tracking refs, tags, merges, and unpushed state.
+- A separate horizontal topology view that folds linear runs and emphasizes branch tips, tags, worktrees, roots, and merges.
 - Current checkout status and metadata for linked worktrees.
 - Commit metadata and first-parent file-change summaries.
 - Loopback-only authenticated Web UI and versioned HTTP API.
