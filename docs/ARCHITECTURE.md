@@ -16,7 +16,8 @@ AiCache core
 
 Optional AI adapters
 ├── loopback Ollama (implemented)
-├── official remote adapters, one provider at a time (future)
+├── OpenAI Responses API (implemented)
+├── other official remote adapters, one provider at a time (future)
 └── official-document resolver (future)
 ```
 
@@ -53,7 +54,7 @@ This cache does not make MCP into an LLM provider. MCP continues to expose bound
 
 ## AI provider profiles
 
-The Web adapter uses a provider-neutral contract for descriptor metadata, cache identity, canonical requests, notices, and structured generation. Version 0.1 implements only the Ollama adapter. Remote providers are added one official API at a time after their request/response dialect and credential boundary are tested.
+The Web adapter uses a provider-neutral contract for descriptor metadata, cache identity, canonical requests, notices, and structured generation. Version 0.1 implements Ollama and OpenAI Responses adapters. Other remote providers are added one official API at a time after their request/response dialect and credential boundary are tested.
 
 Profiles are loaded once at startup from a strict, size-bounded, non-symlink JSON file. The file accepts no credentials, arbitrary endpoints, prompts, or environment-variable names. A configured profile is not active until explicitly selected with repeatable `--ai-profile`. Preview chooses a profile through a GET query, and the server binds the returned request ID to that service. POST still accepts only the request ID, so the browser cannot swap provider, model, endpoint, evidence, or prompt after approval.
 

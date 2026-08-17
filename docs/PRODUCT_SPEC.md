@@ -107,7 +107,7 @@ AI output evaluates change metadata, not authors. The Web adapter requires and v
 }
 ```
 
-MCP prompts let the connected host supply a model; the MCP server itself never calls an LLM. Separately, the optional Web adapter can call an explicitly configured loopback Ollama model. It is disabled by default, rejects cloud-labelled models, sends metadata only, and requires payload preview plus per-request confirmation. BYOK cloud providers and official-document lookup remain out of scope.
+MCP prompts let the connected host supply a model; the MCP server itself never calls an LLM. Separately, the optional Web adapter can call an explicitly enabled loopback Ollama or OpenAI profile. It is disabled by default, sends metadata only, and requires payload preview plus per-request confirmation. Other cloud providers, arbitrary compatible endpoints, and official-document lookup remain out of scope.
 
 The local AI-result cache is content-addressed, bounded, dependency-free, and stored outside repositories in the operating system's discardable user-cache directory. Its metadata never stores raw prompts, diffs, API keys, absolute paths, or remote URLs; generated results can still repeat confidential source text. `--no-ai-cache` bypasses it, while `cache status` and `cache clear` keep storage inspectable and removable.
 

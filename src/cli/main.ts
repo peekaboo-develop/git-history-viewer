@@ -3,6 +3,7 @@ import path from 'node:path';
 import { FileAiCache } from '../ai/cache.js';
 import { defaultAiConfigPath, loadAiConfig } from '../ai/config.js';
 import { OllamaProvider } from '../ai/ollama.js';
+import { OpenAiProvider } from '../ai/openai.js';
 import { AiServiceRegistry } from '../ai/registry.js';
 import { AiExplanationService } from '../ai/service.js';
 import { asViewerError, ViewerError } from '../core/errors.js';
@@ -104,7 +105,12 @@ async function main(): Promise<void> {
         if (!profile) throw new ViewerError('INVALID_ARGUMENT', `Unknown AI profile: ${id}`);
         return profile;
       });
-      const services = profiles.map((profile) => new AiExplanationService(reader, new OllamaProvider({ profileId: profile.id, label: profile.label, model: profile.model, origin: `http://127.0.0.1:${profile.ollamaPort}`, maxOutputTokens: profile.maxOutputTokens }), new FileAiCache(), !parsed.flags.has('no-ai-cache')));
+      const services = profiles.map((profile) => {
+        const provider = profile.provider === 'ollama'
+          ? new OllamaProvider({ profileId: profile.id, label: profile.label, model: profile.model, origin: `http://127.0.0.1:${profile.ollamaPort}`, maxOutputTokens: profile.maxOutputTokens })
+          : new OpenAiProvider({ profileId: profile.id, label: profile.label, model: profile.model, apiKey: process.env.OPENAI_API_KEY ?? '', maxOutputTokens: profile.maxOutputTokens });
+        return new AiExplanationService(reader, provider, new FileAiCache(), !parsed.flags.has('no-ai-cache'));
+      });
       const defaultProfileId = selected.has(config.defaultProfileId) ? config.defaultProfileId : profiles[0]!.id;
       ai = new AiServiceRegistry(services, defaultProfileId);
     }

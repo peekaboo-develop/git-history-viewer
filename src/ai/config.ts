@@ -15,10 +15,20 @@ export interface OllamaProfileConfig {
   maxOutputTokens: number;
 }
 
+export interface OpenAiProfileConfig {
+  id: string;
+  label: string;
+  provider: 'openai';
+  model: string;
+  maxOutputTokens: number;
+}
+
+export type AiProfileConfig = OllamaProfileConfig | OpenAiProfileConfig;
+
 export interface AiConfig {
   schemaVersion: '1';
   defaultProfileId: string;
-  profiles: OllamaProfileConfig[];
+  profiles: AiProfileConfig[];
 }
 
 function record(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
@@ -38,12 +48,14 @@ export function defaultAiConfigPath(platform = process.platform, environment: No
 
 export function validateAiConfig(value: unknown): AiConfig {
   if (!record(value) || !exactKeys(value, ['schemaVersion', 'defaultProfileId', 'profiles']) || value.schemaVersion !== '1' || !profileId(value.defaultProfileId) || !Array.isArray(value.profiles) || value.profiles.length === 0 || value.profiles.length > MAX_PROFILES) throw new ViewerError('INVALID_ARGUMENT', 'AI config has an invalid top-level structure.');
-  const ids = new Set<string>(); const profiles: OllamaProfileConfig[] = [];
+  const ids = new Set<string>(); const profiles: AiProfileConfig[] = [];
   for (const item of value.profiles) {
-    if (!record(item) || !exactKeys(item, ['id', 'label', 'provider', 'model', 'ollamaPort', 'maxOutputTokens']) || !profileId(item.id) || !cleanLabel(item.label, 80) || item.provider !== 'ollama' || !cleanLabel(item.model, 160) || /(?:^|[:_-])cloud(?:$|[:_-])/iu.test(item.model) || !Number.isInteger(item.ollamaPort) || Number(item.ollamaPort) < 1 || Number(item.ollamaPort) > 65_535 || !Number.isInteger(item.maxOutputTokens) || Number(item.maxOutputTokens) < 128 || Number(item.maxOutputTokens) > 8192) throw new ViewerError('INVALID_ARGUMENT', 'AI config contains an invalid profile.');
+    if (!record(item) || !profileId(item.id) || !cleanLabel(item.label, 80) || !cleanLabel(item.model, 160) || !Number.isInteger(item.maxOutputTokens) || Number(item.maxOutputTokens) < 128 || Number(item.maxOutputTokens) > 8192) throw new ViewerError('INVALID_ARGUMENT', 'AI config contains an invalid profile.');
     if (ids.has(item.id)) throw new ViewerError('INVALID_ARGUMENT', `Duplicate AI profile ID: ${item.id}`);
     ids.add(item.id);
-    profiles.push({ id: item.id, label: item.label, provider: 'ollama', model: item.model, ollamaPort: Number(item.ollamaPort), maxOutputTokens: Number(item.maxOutputTokens) });
+    if (item.provider === 'ollama' && exactKeys(item, ['id', 'label', 'provider', 'model', 'ollamaPort', 'maxOutputTokens']) && !/(?:^|[:_-])cloud(?:$|[:_-])/iu.test(item.model) && Number.isInteger(item.ollamaPort) && Number(item.ollamaPort) >= 1 && Number(item.ollamaPort) <= 65_535) profiles.push({ id: item.id, label: item.label, provider: 'ollama', model: item.model, ollamaPort: Number(item.ollamaPort), maxOutputTokens: Number(item.maxOutputTokens) });
+    else if (item.provider === 'openai' && exactKeys(item, ['id', 'label', 'provider', 'model', 'maxOutputTokens'])) profiles.push({ id: item.id, label: item.label, provider: 'openai', model: item.model, maxOutputTokens: Number(item.maxOutputTokens) });
+    else throw new ViewerError('INVALID_ARGUMENT', 'AI config contains an invalid profile.');
   }
   if (!ids.has(value.defaultProfileId)) throw new ViewerError('INVALID_ARGUMENT', 'The default AI profile does not exist.');
   return { schemaVersion: '1', defaultProfileId: value.defaultProfileId, profiles };

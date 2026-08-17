@@ -6,6 +6,7 @@ import test from 'node:test';
 import { FileAiCache } from '../src/ai/cache.js';
 import { buildAiEvidence } from '../src/ai/evidence.js';
 import { OllamaProvider } from '../src/ai/ollama.js';
+import { OpenAiProvider } from '../src/ai/openai.js';
 import { AiServiceRegistry } from '../src/ai/registry.js';
 import { AiExplanationService } from '../src/ai/service.js';
 import type { AiProvider } from '../src/ai/provider.js';
@@ -74,4 +75,26 @@ test('AI registry binds preview request IDs to the selected profile', async () =
   const preview = await registry.preview(data.unsafe, 'second'); assert.equal(preview.provider.profileId, 'second');
   await registry.execute(preview.requestId); assert.deepEqual(generated, ['second']);
   await assert.rejects(registry.preview(data.unsafe, 'missing'), /Unknown AI profile/u);
+});
+
+test('OpenAI provider uses fixed Responses endpoint and performs no preview network call', async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+    calls.push({ url: String(input), ...(init ? { init } : {}) });
+    return new Response(JSON.stringify({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(explanation) }] }] }), { headers: { 'Content-Type': 'application/json' } });
+  }) as typeof fetch;
+  const provider = new OpenAiProvider({ profileId: 'openai-test', label: 'OpenAI test', model: 'gpt-5.4-mini', apiKey: 'sk-test-secret', fetchImpl });
+  assert.equal(await provider.cacheIdentity(), 'openai-responses-v1:gpt-5.4-mini'); assert.equal(calls.length, 0);
+  const result = await provider.generate({ subject: 'test', body: '', comparison: 'first-parent', changes: [{ state: 'A', path: 'unsafe.txt', oldPath: null, added: 1, deleted: 0 }] });
+  assert.equal(result.summaryJa, '変更の要約'); assert.equal(calls[0]?.url, 'https://api.openai.com/v1/responses');
+  const headers = calls[0]?.init?.headers as Record<string, string>; assert.equal(headers.Authorization, 'Bearer sk-test-secret');
+  const request = JSON.parse(String(calls[0]?.init?.body)) as Record<string, unknown>; assert.equal(request.store, false); assert.doesNotMatch(JSON.stringify(request), /sk-test-secret/u);
+});
+
+test('OpenAI provider rejects incomplete responses and refusals', async () => {
+  const response = (value: unknown) => (async () => new Response(JSON.stringify(value))) as typeof fetch;
+  const base = { profileId: 'openai-test', label: 'OpenAI test', model: 'gpt-5.4-mini', apiKey: 'sk-test-secret' };
+  const evidence = { subject: 'test', body: '', comparison: 'root' as const, changes: [] };
+  await assert.rejects(new OpenAiProvider({ ...base, fetchImpl: response({ status: 'incomplete', output: [] }) }).generate(evidence), /incomplete/u);
+  await assert.rejects(new OpenAiProvider({ ...base, fetchImpl: response({ status: 'completed', output: [{ type: 'message', content: [{ type: 'refusal', refusal: 'no' }] }] }) }).generate(evidence), /refused/u);
 });

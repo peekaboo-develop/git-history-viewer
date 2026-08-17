@@ -19,7 +19,9 @@ test('AI config accepts strict Ollama profiles and rejects unsafe drift', () => 
   assert.throws(() => validateAiConfig({ ...valid, apiKey: 'secret' }), /top-level/u);
   assert.throws(() => validateAiConfig({ ...valid, profiles: [...valid.profiles, valid.profiles[0]] }), /Duplicate/u);
   assert.throws(() => validateAiConfig({ ...valid, profiles: [{ ...valid.profiles[0], endpoint: 'https://evil.test' }] }), /invalid profile/u);
-  assert.throws(() => validateAiConfig({ ...valid, profiles: [{ ...valid.profiles[0], provider: 'openai' }] }), /invalid profile/u);
+  const remote = validateAiConfig({ schemaVersion: '1', defaultProfileId: 'remote', profiles: [{ id: 'remote', label: 'OpenAI', provider: 'openai', model: 'gpt-5.4-mini', maxOutputTokens: 1536 }] });
+  assert.equal(remote.profiles[0]?.provider, 'openai');
+  assert.throws(() => validateAiConfig({ schemaVersion: '1', defaultProfileId: 'remote', profiles: [{ ...remote.profiles[0], endpoint: 'https://evil.test' }] }), /invalid profile/u);
 });
 
 test('AI config loader rejects symlinks and oversized files', async () => {
