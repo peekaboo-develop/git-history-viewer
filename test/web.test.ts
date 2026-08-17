@@ -25,6 +25,10 @@ test('web server binds loopback and enforces session, host, origin, and method',
   const page = await request(port, '/', { headers: { Cookie: session } }); assert.equal(page.status, 200); assert.match(String(page.headers['content-security-policy'] ?? ''), /frame-ancestors 'none'/u);
   const topology = await request(port, '/topology.js', { headers: { Cookie: session } });
   assert.equal(topology.status, 200); assert.match(topology.body, /buildTopology/u); assert.doesNotMatch(topology.body, /innerHTML/u);
+  const guides = await request(port, '/api/v1/mcp/guides', { headers: { Cookie: session } });
+  assert.equal(guides.status, 200); assert.match(guides.body, /codex mcp add/u); assert.match(guides.body, /FULL_COMMIT_OID/u);
+  assert.doesNotMatch(guides.body, new RegExp(data.repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'u'));
+  assert.equal((await request(port, '/api/v1/mcp/guides?repo=/tmp/evil', { headers: { Cookie: session } })).status, 400);
 });
 
 test('AI POST requires exact origin, CSRF, content type, and bounded requestId body', async (t) => {

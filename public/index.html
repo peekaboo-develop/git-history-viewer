@@ -15,7 +15,7 @@
       <button id="commits-tab" class="view-tab active" type="button" aria-selected="true">Commits</button>
       <button id="topology-tab" class="view-tab" type="button" aria-selected="false">Topology</button>
     </nav>
-    <div class="actions"><input id="search" type="search" placeholder="Search commits" aria-label="Search commits"><button id="theme" type="button" aria-label="Toggle theme" title="Toggle theme">◐</button></div>
+    <div class="actions"><input id="search" type="search" placeholder="Search commits" aria-label="Search commits"><button id="connections-open" type="button">AI接続</button><button id="theme" type="button" aria-label="Toggle theme" title="Toggle theme">◐</button></div>
   </header>
   <main>
     <section class="history" aria-label="Repository history">
@@ -33,5 +33,18 @@
     </section>
     <aside id="detail"><p class="muted">Select a commit to inspect it.</p></aside>
   </main>
+  <dialog id="connections-dialog" aria-labelledby="connections-title">
+    <div class="dialog-heading"><div><span class="eyebrow">MCP SETUP</span><h2 id="connections-title">AIツールと接続</h2></div><button id="connections-close" type="button" aria-label="Close">×</button></div>
+    <p class="muted">設定は自動変更しません。利用するクライアントを選び、確認したうえでローカル端末へ貼り付けてください。</p>
+    <label class="guide-label" for="guide-client">クライアント</label>
+    <select id="guide-client"></select>
+    <div id="guide-meta" class="guide-meta"></div>
+    <pre id="guide-snippet"></pre>
+    <div class="guide-actions"><a id="guide-docs" target="_blank" rel="noreferrer">公式資料</a><button id="guide-copy" class="primary" type="button">設定をコピー</button></div>
+    <p id="guide-verification" class="muted"></p>
+    <p id="guide-note" class="guide-note"></p>
+    <p id="guide-status" role="status" aria-live="polite"></p>
+    <details><summary>LLM向けMCP Resources</summary><div id="guide-resources" class="guide-resources"></div></details>
+  </dialog>
 </body>
 </html>

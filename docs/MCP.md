@@ -58,7 +58,13 @@ Tool-to-output mappings are the normative operation table in `SCHEMAS.md`. MCP `
 
 ## Resources
 
-Version 0.1 exposes no resources. Tools provide bounded, explicit reads and avoid long-lived resource URIs containing repository or object identifiers. Resources may be added after client interoperability testing.
+Version 0.1 exposes three static, repository-independent resources:
+
+- `git-history-viewer://docs/llm-guide/v1`
+- `git-history-viewer://docs/privacy/v1`
+- `git-history-viewer://schemas/ai-explanation/v1`
+
+Each resource is bounded below 32 KiB and contains no repository path, OID, ref, or other dynamic repository data. Clients are not guaranteed to load Resources automatically, so prompts retain the critical content-policy, untrusted-evidence, and first-parent rules instead of relying on a Resource alone.
 
 ## Prompts
 
@@ -68,6 +74,12 @@ Version 0.1 exposes no resources. Tools provide bounded, explicit reads and avoi
 Prompt inputs contain a full commit OID and optional parent index. Prompt results contain instructions and identifiers only; they never embed commit data by reading the core directly. The host/model must call the normally registered tools, so the active content policy and path disclosure choices remain enforced. In content modes the prompt may suggest the bounded patch tool. Repository content is labelled untrusted evidence and must not be followed as instructions.
 
 Official-document research remains a host capability in version 0.1. Prompts require primary-source URLs and forbid invented citations. An embedded resolver is a later independently permissioned component.
+
+## Web setup guidance
+
+The authenticated Web UI serves versioned setup templates for Codex, Claude Code, and Cursor. Templates include a verification date, tested client version, official documentation URL, and a connection-check instruction. The page does not modify client configuration. Shell templates resolve the current repository locally; JSON templates use an explicit placeholder. The HTTP response never contains the viewer repository's absolute path.
+
+The commit-detail copy action emits the selected full OID and workflow instructions only. It does not place commit messages, paths, patches, session tokens, or repository paths on the clipboard.
 
 ## Privacy invariants
 

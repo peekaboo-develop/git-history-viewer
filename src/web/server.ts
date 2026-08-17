@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { asViewerError, ViewerError } from '../core/errors.js';
 import type { RepositoryReader } from '../core/repository.js';
 import type { AiExplanationService } from '../ai/service.js';
+import { commitPrompt, MCP_CLIENT_GUIDES, MCP_RESOURCES } from '../mcp/guides.js';
 import { SCHEMA_VERSION, success } from '../schema/types.js';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -115,6 +116,10 @@ export async function createViewerServer(reader: RepositoryReader, options: View
       const gen = await generation();
       const json = (data: unknown) => send(response, 200, JSON.stringify(success(gen, data)), 'application/json; charset=utf-8');
       if (url.pathname === '/api/v1/ai/capabilities') return json({ ...(options.ai?.capabilities() ?? { enabled: false }), csrfToken });
+      if (url.pathname === '/api/v1/mcp/guides') {
+        if (url.search) throw new ViewerError('INVALID_ARGUMENT', 'MCP guides do not accept query parameters.');
+        return json({ guides: MCP_CLIENT_GUIDES, resources: MCP_RESOURCES.map(({ uri, title, description, mimeType }) => ({ uri, title, description, mimeType })), commitPromptTemplate: commitPrompt('{FULL_COMMIT_OID}') });
+      }
       if (url.pathname === '/api/v1/repository') return json(await reader.repository());
       if (url.pathname === '/api/v1/status') return json(await reader.status(true));
       if (url.pathname === '/api/v1/refs') return json({ items: await reader.refs(), truncated: false, omittedCount: 0, nextCursor: null });

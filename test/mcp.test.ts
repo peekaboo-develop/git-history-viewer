@@ -25,3 +25,15 @@ test('redacted MCP registers patch and Japanese prompts', async (t) => {
   assert.ok((await client.listTools()).tools.some((item) => item.name === 'git_history_get_commit_patch'));
   const prompts = await client.listPrompts(); assert.ok(prompts.prompts.some((item) => item.name === 'explain_commit_ja')); assert.ok(prompts.prompts.some((item) => item.name === 'review_commit_risk_ja'));
 });
+
+test('MCP exposes bounded static guidance resources without repository data', async (t) => {
+  const data = await fixture(); const { client, transport } = await clientFor(data.repo, 'metadata'); t.after(() => transport.close());
+  const listed = await client.listResources(); const uris = listed.resources.map((item) => item.uri);
+  assert.deepEqual(uris.sort(), ['git-history-viewer://docs/llm-guide/v1', 'git-history-viewer://docs/privacy/v1', 'git-history-viewer://schemas/ai-explanation/v1'].sort());
+  for (const uri of uris) {
+    const resource = await client.readResource({ uri }); const serialized = JSON.stringify(resource);
+    assert.ok(Buffer.byteLength(serialized) < 32 * 1024); assert.doesNotMatch(serialized, new RegExp(data.repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'u'));
+  }
+  const guide = await client.readResource({ uri: 'git-history-viewer://docs/llm-guide/v1' });
+  assert.match(JSON.stringify(guide), /first-parent/u); assert.match(JSON.stringify(guide), /untrusted evidence/u);
+});

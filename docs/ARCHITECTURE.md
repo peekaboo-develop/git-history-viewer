@@ -173,6 +173,7 @@ GET /api/v1/worktrees
 GET /api/v1/unpushed
 GET /api/v1/generation
 GET /api/v1/ai/capabilities
+GET /api/v1/mcp/guides
 GET /api/v1/commits/{oid}/explanation-preview
 POST /api/v1/ai/explanations
 ```
