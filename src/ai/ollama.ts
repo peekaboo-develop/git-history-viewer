@@ -1,5 +1,6 @@
 import { ViewerError } from '../core/errors.js';
 import type { AiEvidenceSummary, AiExplanation } from '../schema/types.js';
+import type { AiProvider, AiProviderDescriptor } from './provider.js';
 
 const MAX_RESPONSE_BYTES = 256 * 1024;
 const MAX_RESULT_BYTES = 64 * 1024;
@@ -45,17 +46,23 @@ async function readBounded(response: Response): Promise<string> {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-export interface OllamaProviderOptions { origin?: string; model: string; timeoutMs?: number; fetchImpl?: typeof fetch }
+export interface OllamaProviderOptions { profileId?: string; label?: string; origin?: string; model: string; maxOutputTokens?: number; timeoutMs?: number; fetchImpl?: typeof fetch }
 
-export class OllamaProvider {
+export class OllamaProvider implements AiProvider {
   readonly id = 'ollama-loopback'; readonly origin: string; readonly model: string;
+  readonly descriptor: AiProviderDescriptor;
   private readonly timeoutMs: number; private readonly fetchImpl: typeof fetch;
   constructor(options: OllamaProviderOptions) {
     const url = new URL(options.origin ?? 'http://127.0.0.1:11434');
     if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.username || url.password || url.pathname !== '/' || url.search || url.hash || !url.port) throw new ViewerError('INVALID_ARGUMENT', 'Ollama origin must be http://127.0.0.1:PORT.');
     if (!options.model || options.model.length > 160 || /[\u0000-\u001f\u007f]/u.test(options.model)) throw new ViewerError('INVALID_ARGUMENT', 'Ollama model is invalid.');
     if (/(?:^|[:_-])cloud(?:$|[:_-])/iu.test(options.model)) throw new ViewerError('INVALID_ARGUMENT', 'Ollama cloud models are not supported.');
+    const profileId = options.profileId ?? 'ollama-default'; const label = options.label ?? options.model; const maxOutputTokens = options.maxOutputTokens ?? 1536;
+    if (!/^[a-z0-9][a-z0-9_-]{0,63}$/u.test(profileId)) throw new ViewerError('INVALID_ARGUMENT', 'AI profile ID is invalid.');
+    if (!label || label.length > 80 || /[\u0000-\u001f\u007f]/u.test(label)) throw new ViewerError('INVALID_ARGUMENT', 'AI profile label is invalid.');
+    if (!Number.isInteger(maxOutputTokens) || maxOutputTokens < 128 || maxOutputTokens > 8192) throw new ViewerError('INVALID_ARGUMENT', 'AI maxOutputTokens must be between 128 and 8192.');
     this.origin = url.origin; this.model = options.model; this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS; this.fetchImpl = options.fetchImpl ?? fetch;
+    this.descriptor = { profileId, label, providerId: 'ollama', model: this.model, locality: 'loopback', endpointOrigin: this.origin, adapterVersion: 'ollama-v1', structuredOutput: 'required-native', maxInputBytes: 16 * 1024, maxOutputTokens };
   }
   private async call(path: '/api/tags' | '/api/chat', init: RequestInit): Promise<unknown> {
     try {
@@ -76,8 +83,13 @@ export class OllamaProvider {
     if (!record(found) || typeof found.digest !== 'string' || !/^[0-9a-f]{64}$/u.test(found.digest)) throw new ViewerError('PROVIDER_MODEL_NOT_FOUND', 'The configured Ollama model is not installed.');
     return found.digest;
   }
+  cacheIdentity(): Promise<string> { return this.revision(); }
+  notice(): string { return 'Ollama endpoint is loopback, but execution location still depends on your Ollama model and configuration.'; }
+  canonicalRequest(evidence: AiEvidenceSummary, cacheIdentity: string): unknown {
+    return { promptVersion: AI_PROMPT_VERSION, provider: this.descriptor.providerId, adapterVersion: this.descriptor.adapterVersion, model: this.model, cacheIdentity, system: AI_SYSTEM_PROMPT, evidence, schema: AI_OUTPUT_SCHEMA, settings: { temperature: 0, maxOutputTokens: this.descriptor.maxOutputTokens, think: false } };
+  }
   request(evidence: AiEvidenceSummary): Record<string, unknown> {
-    return { model: this.model, messages: [{ role: 'system', content: AI_SYSTEM_PROMPT }, { role: 'user', content: JSON.stringify(evidence) }], format: AI_OUTPUT_SCHEMA, stream: false, think: false, keep_alive: 0, options: { temperature: 0, num_predict: 1536 } };
+    return { model: this.model, messages: [{ role: 'system', content: AI_SYSTEM_PROMPT }, { role: 'user', content: JSON.stringify(evidence) }], format: AI_OUTPUT_SCHEMA, stream: false, think: false, keep_alive: 0, options: { temperature: 0, num_predict: this.descriptor.maxOutputTokens } };
   }
   async generate(evidence: AiEvidenceSummary): Promise<AiExplanation> {
     const body = JSON.stringify(this.request(evidence));

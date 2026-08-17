@@ -16,7 +16,7 @@ AiCache core
 
 Optional AI adapters
 ├── loopback Ollama (implemented)
-├── BYOK cloud LLM (future)
+├── official remote adapters, one provider at a time (future)
 └── official-document resolver (future)
 ```
 
@@ -49,7 +49,13 @@ Each result is a bounded JSON file under a two-hex-character shard. The cache us
 
 The default caps are 50 MiB, 10,000 entries, and 128 KiB per record. Cleanup runs at write time no more than once per process-day and removes oldest recognized entries first. It does not update access time on reads. `cache clear` enumerates and unlinks only files matching the cache shard and filename contract; it never recursively deletes an arbitrary directory.
 
-This cache does not make MCP into an LLM provider. MCP continues to expose bounded Git evidence. The Web adapter owns the Ollama request and validates the structured result before persistence. `--no-ai-cache` bypasses cache reads and writes.
+This cache does not make MCP into an LLM provider. MCP continues to expose bounded Git evidence. The Web adapter owns the provider request and validates the structured result before persistence. `--no-ai-cache` bypasses cache reads and writes.
+
+## AI provider profiles
+
+The Web adapter uses a provider-neutral contract for descriptor metadata, cache identity, canonical requests, notices, and structured generation. Version 0.1 implements only the Ollama adapter. Remote providers are added one official API at a time after their request/response dialect and credential boundary are tested.
+
+Profiles are loaded once at startup from a strict, size-bounded, non-symlink JSON file. The file accepts no credentials, arbitrary endpoints, prompts, or environment-variable names. A configured profile is not active until explicitly selected with repeatable `--ai-profile`. Preview chooses a profile through a GET query, and the server binds the returned request ID to that service. POST still accepts only the request ID, so the browser cannot swap provider, model, endpoint, evidence, or prompt after approval.
 
 ## Public Node API
 

@@ -6,14 +6,16 @@ import test from 'node:test';
 import { FileAiCache } from '../src/ai/cache.js';
 import { buildAiEvidence } from '../src/ai/evidence.js';
 import { OllamaProvider } from '../src/ai/ollama.js';
+import { AiServiceRegistry } from '../src/ai/registry.js';
 import { AiExplanationService } from '../src/ai/service.js';
+import type { AiProvider } from '../src/ai/provider.js';
 import { openRepository } from '../src/core/repository.js';
 import { fixture, git } from './fixture.js';
 
 const explanation = {
-  schemaVersion: '1', summaryJa: '変更の要約',
+  schemaVersion: '1' as const, summaryJa: '変更の要約',
   changes: [{ titleJa: 'ファイル追加', detailJa: 'unsafe.txtを追加しました。', evidencePaths: ['unsafe.txt'] }],
-  terms: [], risks: [{ level: 'unknown', rationaleJa: 'パッチ未確認です。', evidencePaths: ['unsafe.txt'] }],
+  terms: [], risks: [{ level: 'unknown' as const, rationaleJa: 'パッチ未確認です。', evidencePaths: ['unsafe.txt'] }],
   testObservations: [], limitations: [],
 };
 
@@ -55,4 +57,21 @@ test('preview, explicit execution, and cache coalesce Ollama calls', async () =>
   assert.equal(request.stream, false); assert.equal(request.think, false); assert.equal(request.keep_alive, 0); assert.equal(Object.hasOwn(request, 'tools'), false);
   const secondPreview = await service.preview(data.unsafe); assert.equal(secondPreview.cacheHit, true);
   const second = await service.execute(secondPreview.requestId); assert.equal(second.cache.hit, true); assert.equal(calls.filter((call) => call.url.endsWith('/api/chat')).length, 1);
+});
+
+test('AI registry binds preview request IDs to the selected profile', async () => {
+  const data = await fixture(); const reader = await openRepository(data.repo); const generated: string[] = [];
+  const makeProvider = (profileId: string): AiProvider => ({
+    descriptor: { profileId, label: profileId, providerId: 'ollama', model: profileId, locality: 'loopback', endpointOrigin: 'http://127.0.0.1:11434', adapterVersion: 'test-v1', structuredOutput: 'required-native', maxInputBytes: 16 * 1024, maxOutputTokens: 1536 },
+    cacheIdentity: async () => `identity-${profileId}`,
+    canonicalRequest: (evidence, identity) => ({ evidence, identity }),
+    notice: () => 'test',
+    generate: async () => { generated.push(profileId); return { ...explanation, limitations: [] }; },
+  });
+  const first = new AiExplanationService(reader, makeProvider('first'), undefined, false); const second = new AiExplanationService(reader, makeProvider('second'), undefined, false);
+  const registry = new AiServiceRegistry([first, second], 'first');
+  assert.deepEqual(registry.capabilities().profiles.map((profile) => profile.profileId), ['first', 'second']);
+  const preview = await registry.preview(data.unsafe, 'second'); assert.equal(preview.provider.profileId, 'second');
+  await registry.execute(preview.requestId); assert.deepEqual(generated, ['second']);
+  await assert.rejects(registry.preview(data.unsafe, 'missing'), /Unknown AI profile/u);
 });

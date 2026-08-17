@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { FileAiCache, aiCacheKey, digestAiInput, type AiCacheRequest } from './cache.js';
 import { buildAiEvidence, type BuiltAiEvidence } from './evidence.js';
-import { AI_OUTPUT_SCHEMA, AI_PROMPT_VERSION, AI_SYSTEM_PROMPT, OllamaProvider, validateExplanation } from './ollama.js';
+import { AI_PROMPT_VERSION, validateExplanation } from './ollama.js';
+import type { AiProvider, AiProviderDescriptor } from './provider.js';
 import { ViewerError } from '../core/errors.js';
 import type { RepositoryReader } from '../core/repository.js';
 import type { AiExplanation } from '../schema/types.js';
@@ -9,22 +10,22 @@ import type { AiExplanation } from '../schema/types.js';
 const REQUEST_TTL_MS = 5 * 60 * 1_000;
 const MAX_PREVIEWS = 100;
 
-interface PendingRequest { oid: string; generation: string; evidence: BuiltAiEvidence; revision: string; cacheRequest: AiCacheRequest; expiresAt: number; promise: Promise<AiExecution> | null }
+interface PendingRequest { oid: string; generation: string; evidence: BuiltAiEvidence; cacheIdentity: string; cacheRequest: AiCacheRequest; expiresAt: number; promise: Promise<AiExecution> | null }
 export interface AiExecution { explanation: AiExplanation; cache: { hit: boolean; stored: boolean }; warning: string | null }
 
 export interface AiPreview {
   requestId: string; expiresAt: string; source: { oid: string; parentIndex: number | null; generation: string };
-  provider: { id: string; endpointOrigin: string; model: string };
+  provider: AiProviderDescriptor;
   evidence: BuiltAiEvidence['evidence']; includedChanges: number; excludedChanges: number; truncated: boolean; inputBytes: number; cacheHit: boolean;
   notice: string;
 }
 
 export class AiExplanationService {
   private readonly requests = new Map<string, PendingRequest>(); private active = 0; private waiting = 0;
-  constructor(private readonly reader: RepositoryReader, readonly provider: OllamaProvider, private readonly cache = new FileAiCache(), private readonly cacheEnabled = true) {}
+  constructor(private readonly reader: RepositoryReader, readonly provider: AiProvider, private readonly cache = new FileAiCache(), private readonly cacheEnabled = true) {}
 
-  capabilities(): { enabled: true; provider: { id: string; endpointOrigin: string; model: string }; policy: string } {
-    return { enabled: true, provider: { id: this.provider.id, endpointOrigin: this.provider.origin, model: this.provider.model }, policy: `metadata-only; cache-${this.cacheEnabled ? 'enabled' : 'disabled'}` };
+  capabilities(): { enabled: true; profiles: AiProviderDescriptor[]; defaultProfileId: string; policy: string } {
+    return { enabled: true, profiles: [this.provider.descriptor], defaultProfileId: this.provider.descriptor.profileId, policy: `metadata-only; cache-${this.cacheEnabled ? 'enabled' : 'disabled'}` };
   }
 
   private cleanup(): void {
@@ -35,13 +36,14 @@ export class AiExplanationService {
   async preview(oid: string): Promise<AiPreview> {
     this.cleanup();
     if (this.cacheEnabled) await this.cache.stats();
-    const [generation, evidence, revision] = await Promise.all([this.reader.generation(), buildAiEvidence(this.reader, oid), this.provider.revision()]);
-    const canonicalRequest = JSON.stringify({ promptVersion: AI_PROMPT_VERSION, provider: this.provider.id, model: this.provider.model, revision, system: AI_SYSTEM_PROMPT, evidence: evidence.evidence, schema: AI_OUTPUT_SCHEMA, settings: { temperature: 0, numPredict: 1536, think: false } });
-    const cacheRequest: AiCacheRequest = { operation: 'explain', targetLanguage: 'ja', promptVersion: AI_PROMPT_VERSION, provider: this.provider.id, model: this.provider.model, exactInputDigest: digestAiInput(canonicalRequest) };
+    const [generation, evidence, cacheIdentity] = await Promise.all([this.reader.generation(), buildAiEvidence(this.reader, oid), this.provider.cacheIdentity()]);
+    const canonicalRequest = JSON.stringify(this.provider.canonicalRequest(evidence.evidence, cacheIdentity));
+    const descriptor = this.provider.descriptor;
+    const cacheRequest: AiCacheRequest = { operation: 'explain', targetLanguage: 'ja', promptVersion: AI_PROMPT_VERSION, provider: descriptor.providerId, model: descriptor.model, exactInputDigest: digestAiInput(canonicalRequest) };
     const requestId = randomBytes(16).toString('hex'); const expiresAt = Date.now() + REQUEST_TTL_MS;
-    this.requests.set(requestId, { oid, generation, evidence, revision, cacheRequest, expiresAt, promise: null });
+    this.requests.set(requestId, { oid, generation, evidence, cacheIdentity, cacheRequest, expiresAt, promise: null });
     const cacheHit = this.cacheEnabled && (await this.cache.get<AiExplanation>(aiCacheKey(cacheRequest))) !== null;
-    return { requestId, expiresAt: new Date(expiresAt).toISOString(), source: { oid, parentIndex: evidence.parentIndex, generation }, provider: { id: this.provider.id, endpointOrigin: this.provider.origin, model: this.provider.model }, evidence: evidence.evidence, includedChanges: evidence.includedChanges, excludedChanges: evidence.excludedChanges, truncated: evidence.truncated, inputBytes: evidence.inputBytes, cacheHit, notice: 'Ollama endpoint is loopback, but execution location still depends on your Ollama model and configuration.' };
+    return { requestId, expiresAt: new Date(expiresAt).toISOString(), source: { oid, parentIndex: evidence.parentIndex, generation }, provider: descriptor, evidence: evidence.evidence, includedChanges: evidence.includedChanges, excludedChanges: evidence.excludedChanges, truncated: evidence.truncated, inputBytes: evidence.inputBytes, cacheHit, notice: this.provider.notice() };
   }
 
   async execute(requestId: string): Promise<AiExecution> {

@@ -33,9 +33,10 @@ test('web server binds loopback and enforces session, host, origin, and method',
 
 test('AI POST requires exact origin, CSRF, content type, and bounded requestId body', async (t) => {
   const data = await fixture(); const reader = await openRepository(data.repo);
+  const previewProfiles: Array<string | null | undefined> = [];
   const fakeAi = {
-    capabilities: () => ({ enabled: true as const, provider: { id: 'test', endpointOrigin: 'http://127.0.0.1:11434', model: 'test' }, policy: 'metadata-only' }),
-    preview: async () => ({ requestId: 'b'.repeat(32) }),
+    capabilities: () => ({ enabled: true as const, profiles: [{ profileId: 'test', label: 'Test', providerId: 'ollama' as const, endpointOrigin: 'http://127.0.0.1:11434', model: 'test', locality: 'loopback' as const, adapterVersion: 'test-v1', structuredOutput: 'required-native' as const, maxInputBytes: 16384, maxOutputTokens: 1536 }], defaultProfileId: 'test', policy: 'metadata-only' }),
+    preview: async (_oid: string, profile: string | null | undefined) => { previewProfiles.push(profile); return { requestId: 'b'.repeat(32) }; },
     execute: async () => ({ explanation: { schemaVersion: '1' as const, summaryJa: 'ok', changes: [], terms: [], risks: [], testObservations: [], limitations: [] }, cache: { hit: false, stored: true }, warning: null }),
   };
   const viewer = await createViewerServer(reader, { port: 0, limit: 50, token: 'a'.repeat(64), ai: fakeAi as never }); await viewer.listen();
@@ -43,6 +44,9 @@ test('AI POST requires exact origin, CSRF, content type, and bounded requestId b
   const login = await request(port, `/?token=${'a'.repeat(64)}`); const session = (login.headers['set-cookie']?.[0] ?? '').split(';')[0] ?? '';
   const capabilities = await request(port, '/api/v1/ai/capabilities', { headers: { Cookie: session } }); const csrf = JSON.parse(capabilities.body).data.csrfToken as string;
   const base = { Cookie: session, Origin: `http://127.0.0.1:${port}`, 'Content-Type': 'application/json', 'X-GHV-CSRF': csrf };
+  assert.equal((await request(port, `/api/v1/commits/${data.unsafe}/explanation-preview?profile=test`, { headers: { Cookie: session } })).status, 200); assert.deepEqual(previewProfiles, ['test']);
+  assert.equal((await request(port, `/api/v1/commits/${data.unsafe}/explanation-preview?profile=test&profile=other`, { headers: { Cookie: session } })).status, 400);
+  assert.equal((await request(port, `/api/v1/commits/${data.unsafe}/explanation-preview?model=evil`, { headers: { Cookie: session } })).status, 400);
   assert.equal((await request(port, '/api/v1/ai/explanations', { method: 'POST', headers: { ...base, Origin: '' }, body: JSON.stringify({ requestId: 'b'.repeat(32) }) })).status, 403);
   assert.equal((await request(port, '/api/v1/ai/explanations', { method: 'POST', headers: { ...base, 'X-GHV-CSRF': 'wrong' }, body: JSON.stringify({ requestId: 'b'.repeat(32) }) })).status, 403);
   assert.equal((await request(port, '/api/v1/ai/explanations', { method: 'POST', headers: { ...base, 'Content-Type': 'text/plain' }, body: '{}' })).status, 415);

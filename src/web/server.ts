@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { asViewerError, ViewerError } from '../core/errors.js';
 import type { RepositoryReader } from '../core/repository.js';
-import type { AiExplanationService } from '../ai/service.js';
+import type { AiRuntime } from '../ai/registry.js';
 import { commitPrompt, MCP_CLIENT_GUIDES, MCP_RESOURCES } from '../mcp/guides.js';
 import { SCHEMA_VERSION, success } from '../schema/types.js';
 
@@ -67,7 +67,7 @@ async function jsonBody(request: IncomingMessage, maximumBytes: number): Promise
   return parsed as Record<string, unknown>;
 }
 
-export interface ViewerServerOptions { port: number; limit: number; token?: string; ai?: AiExplanationService }
+export interface ViewerServerOptions { port: number; limit: number; token?: string; ai?: AiRuntime }
 
 export async function createViewerServer(reader: RepositoryReader, options: ViewerServerOptions) {
   const token = options.token ?? randomBytes(32).toString('hex');
@@ -135,9 +135,9 @@ export async function createViewerServer(reader: RepositoryReader, options: View
       if (changes) return json(await reader.changes(changes[1] ?? '', url.searchParams.has('parentIndex') ? Number(url.searchParams.get('parentIndex')) : null, true));
       const preview = url.pathname.match(/^\/api\/v1\/commits\/([0-9a-f]+)\/explanation-preview$/u);
       if (preview) {
-        if (url.search) throw new ViewerError('INVALID_ARGUMENT', 'AI preview does not accept query parameters.');
+        if ([...url.searchParams.keys()].some((key) => key !== 'profile') || url.searchParams.getAll('profile').length > 1) throw new ViewerError('INVALID_ARGUMENT', 'AI preview accepts only one profile parameter.');
         if (!options.ai) throw new ViewerError('AI_DISABLED', 'AI explanation is disabled.');
-        return json(await options.ai.preview(preview[1] ?? ''));
+        return json(await options.ai.preview(preview[1] ?? '', url.searchParams.get('profile')));
       }
       const commit = url.pathname.match(/^\/api\/v1\/commits\/([0-9a-f]+)$/u);
       if (commit) return json(await reader.commit(commit[1] ?? ''));
