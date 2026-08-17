@@ -67,6 +67,7 @@ git-history-viewer mcp --repo PATH [--content-policy metadata|redacted|full] [--
 git-history-viewer inspect repository|status|refs|commits [--repo PATH] [--json]
 git-history-viewer inspect commit OID [--repo PATH] [--json]
 git-history-viewer inspect changes OID [--repo PATH] [--parent-index N] [--json]
+git-history-viewer cache status|clear [--json]
 git-history-viewer doctor [repo] [--json]
 git-history-viewer version
 ```
@@ -107,6 +108,8 @@ AI output evaluates change evidence, not authors. Prompts recommend this result 
 ```
 
 Initial AI support is delivered as MCP prompts so the connected host supplies the model and pays its cost. The MCP server itself never calls an LLM. Web UI provider adapters require a separate explicit consent flow and are not part of version 0.1.
+
+Version 0.1 includes an inactive local AI-result cache foundation for those future adapters. It is content-addressed, bounded, dependency-free, and stored outside repositories in the operating system's discardable user-cache directory. Its metadata never stores raw prompts, diffs, API keys, absolute paths, or remote URLs; generated results can still repeat confidential source text. `cache status` and `cache clear` are available before provider adapters so storage remains inspectable and removable.
 
 ## Release blockers
 

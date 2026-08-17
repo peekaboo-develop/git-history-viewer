@@ -121,7 +121,7 @@ type PublicError = {
   code: "INVALID_ARGUMENT" | "INVALID_OID" | "NOT_FOUND" |
     "STALE_CURSOR" | "STATE_CHANGED" | "CONTENT_DISABLED" |
     "CONTENT_EXCLUDED" | "OUTPUT_LIMIT" | "TIMEOUT" |
-    "NOT_GIT_REPOSITORY" | "GIT_FAILED";
+    "NOT_GIT_REPOSITORY" | "GIT_FAILED" | "CACHE_FAILED";
   message: string;
   retryable: boolean;
   details: Record<string, string | number | boolean | null>;
@@ -180,6 +180,7 @@ Commit pages preserve Git topological/date order. Changes preserve Git diff orde
 | `OUTPUT_LIMIT` | 413 | 6 | `isError: true` |
 | `TIMEOUT` | 504 | 7 | `isError: true` |
 | `GIT_FAILED` | 500 | 1 | `isError: true` |
+| `CACHE_FAILED` | not exposed | 1 | not exposed |
 
 HTTP errors use the normal envelope with `data: null` and `error: PublicError`. CLI JSON uses that envelope on stderr and prints nothing to stdout on failure. MCP uses the same failure envelope with `isError: true`; its text block is only `code: message`.
 
@@ -199,3 +200,7 @@ Before 1.0, compatible additions may add optional fields. Removing fields, chang
 | worktrees | `Page<Worktree>` |
 | unpushed | `Page<CommitSummary>` |
 | generation | `{ generation: string }` |
+| cache status | `{ entries: number; bytes: number; oldestModifiedAt: IsoDate \| null; newestModifiedAt: IsoDate \| null }` |
+| cache clear | `{ removedEntries: number; removedBytes: number }` |
+
+Cache CLI JSON uses the normal envelope with the fixed generation marker `cache-v1`. Cache records themselves are private implementation data and are not part of the public transport schema.

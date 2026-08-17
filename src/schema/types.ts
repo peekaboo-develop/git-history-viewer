@@ -3,7 +3,7 @@ export const OID_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 
 export type ErrorCode = 'INVALID_ARGUMENT' | 'INVALID_OID' | 'NOT_FOUND' |
   'STALE_CURSOR' | 'STATE_CHANGED' | 'CONTENT_DISABLED' | 'CONTENT_EXCLUDED' |
-  'OUTPUT_LIMIT' | 'TIMEOUT' | 'NOT_GIT_REPOSITORY' | 'GIT_FAILED';
+  'OUTPUT_LIMIT' | 'TIMEOUT' | 'NOT_GIT_REPOSITORY' | 'GIT_FAILED' | 'CACHE_FAILED';
 
 export interface PublicWarning { code: string; message: string; details: Record<string, string | number | boolean | null> }
 export interface PublicError { code: ErrorCode; message: string; retryable: boolean; details: Record<string, string | number | boolean | null> }

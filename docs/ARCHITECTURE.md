@@ -9,6 +9,11 @@ RepositoryReader core
 ├── stdio MCP server
 └── prompt/context builders
 
+AiCache core
+├── content-addressed split JSON
+├── CLI status/clear
+└── future Web AI adapters
+
 Optional future adapters
 ├── BYOK cloud LLM
 ├── loopback Ollama
@@ -22,6 +27,7 @@ The core owns all Git subprocesses, parsing, output limits, repository state gen
 ```text
 bin/git-history-viewer.mjs
 src/
+  ai/
   cli/
   core/
   mcp/
@@ -34,6 +40,16 @@ test/
 ```
 
 Start as one npm package. Split packages only if independent consumers need the core API in practice.
+
+## AI-result cache boundary
+
+The version 0.1 cache is an internal implementation detail, not a supported Node API and not an HTTP or MCP content endpoint. A key is SHA-256 over a fixed canonical request containing operation, target language, prompt version, provider, model, and the SHA-256 digest of the exact model input. Raw model input is never persisted.
+
+Each result is a bounded JSON file under a two-hex-character shard. The cache uses the platform cache location (`~/Library/Caches` on macOS, `$XDG_CACHE_HOME` or `~/.cache` on Linux, and `%LOCALAPPDATA%` on Windows). Writes use a private same-directory temporary file and rename. Invalid, oversized, symlinked, or corrupt entries are cache misses or fail closed. In-process requests for one key share a single promise.
+
+The default caps are 50 MiB, 10,000 entries, and 128 KiB per record. Cleanup runs at write time no more than once per process-day and removes oldest recognized entries first. It does not update access time on reads. `cache clear` enumerates and unlinks only files matching the cache shard and filename contract; it never recursively deletes an arbitrary directory.
+
+This cache does not make MCP into an LLM provider. MCP continues to expose bounded Git evidence. A future Web adapter must own the model request and receive the result before it can persist that result.
 
 ## Public Node API
 
@@ -109,6 +125,7 @@ OUTPUT_LIMIT
 TIMEOUT
 NOT_GIT_REPOSITORY
 GIT_FAILED
+CACHE_FAILED
 ```
 
 ## Web boundary

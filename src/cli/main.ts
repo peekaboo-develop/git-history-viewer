@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import { FileAiCache } from '../ai/cache.js';
 import { asViewerError, ViewerError } from '../core/errors.js';
 import { openRepository, type RepositoryOptions } from '../core/repository.js';
 import { runMcpServer } from '../mcp/server.js';
@@ -41,12 +42,25 @@ function openBrowser(url: string): void {
   spawn(command, args, { shell: false, detached: true, stdio: 'ignore' }).unref();
 }
 function help(): void {
-  process.stdout.write(`Git History Viewer\n\nCommands:\n  web [repo] [--port 0|PORT] [--limit N] [--no-open]\n  mcp --repo PATH [--content-policy metadata|redacted|full] [--exclude-path PREFIX]\n  inspect repository|status|refs|commits|commit|changes [OID] [--repo PATH] [--json]\n  doctor [repo] [--json]\n  version\n`);
+  process.stdout.write(`Git History Viewer\n\nCommands:\n  web [repo] [--port 0|PORT] [--limit N] [--no-open]\n  mcp --repo PATH [--content-policy metadata|redacted|full] [--exclude-path PREFIX]\n  inspect repository|status|refs|commits|commit|changes [OID] [--repo PATH] [--json]\n  cache status|clear [--json]\n  doctor [repo] [--json]\n  version\n`);
 }
 async function main(): Promise<void> {
   const parsed = parse(process.argv.slice(2));
   if (parsed.command === 'help' || parsed.flags.has('help')) return help();
   if (parsed.command === 'version') return void process.stdout.write('0.1.0-alpha.0\n');
+  if (parsed.command === 'cache') {
+    if (parsed.positional.length > 1 || parsed.options.size > 0 || [...parsed.flags].some((flag) => flag !== 'json')) throw new ViewerError('INVALID_ARGUMENT', 'Unsupported cache command argument.');
+    const cache = new FileAiCache(); const action = parsed.positional[0] ?? 'status';
+    if (action === 'status') {
+      const data = await cache.stats();
+      return void process.stdout.write(parsed.flags.has('json') ? `${JSON.stringify(success('cache-v1', data))}\n` : `AI cache: ${data.entries} entries, ${data.bytes} bytes\n`);
+    }
+    if (action === 'clear') {
+      const data = await cache.clear();
+      return void process.stdout.write(parsed.flags.has('json') ? `${JSON.stringify(success('cache-v1', data))}\n` : `AI cache cleared: ${data.removedEntries} entries, ${data.removedBytes} bytes\n`);
+    }
+    throw new ViewerError('INVALID_ARGUMENT', 'Unknown cache command.');
+  }
   const repoPath = path.resolve(option(parsed, 'repo') ?? parsed.positional[parsed.command === 'web' || parsed.command === 'doctor' ? 0 : 1] ?? process.cwd());
   const policy = (option(parsed, 'content-policy') ?? 'metadata') as ContentPolicy;
   if (!['metadata', 'redacted', 'full'].includes(policy)) throw new ViewerError('INVALID_ARGUMENT', 'Unknown content policy.');

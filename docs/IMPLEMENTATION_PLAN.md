@@ -35,9 +35,12 @@ Gate: manual browser QA, install-from-tarball QA, rollback test, and user approv
 
 Implement only after MCP usage validates the schemas:
 
+- Use the existing content-addressed `AiCache` boundary; do not couple providers to its file layout.
 - Environment-variable BYOK and loopback Ollama adapters.
 - Preflight payload preview and per-request consent.
-- Strict response schema, output caps, and no default cache.
+- Strict response schema and output caps.
+- Explicit cache preference, cache-hit indicator, and no-cache execution path.
+- Do not depend on MCP client sampling; MCP remains the evidence/tool integration.
 - Separate fact/evidence and model-opinion presentation.
 
 ## Phase 5: official documents

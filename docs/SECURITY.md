@@ -19,12 +19,15 @@
 | data leakage to an MCP model | metadata-only default, no email/absolute paths, content policy at startup | messages and relative paths may be sensitive |
 | patch leakage | patch tool absent by default, explicit startup policy and request | redaction misses secrets |
 | prompt injection from source text | mark evidence untrusted; prompts forbid obeying repository instructions | model behavior cannot be guaranteed |
+| cached model output leaks repository context | cache metadata omits raw input/path/URL/key, private cache permissions, bounded entries, explicit clear | generated output itself may repeat confidential text |
+| cache path or symlink redirection | fixed OS cache root, content-addressed filenames, reject symlinked cache root/shards, no request-supplied paths | malware running as the same user |
+| cache corruption or concurrent writes | same-directory temporary file and rename, schema validation, per-key in-process coalescing | cross-process last-writer wins |
 | SSRF in future docs resolver | HTTPS official-domain registry, DNS/IP checks, redirect revalidation, no arbitrary URL | compromised official site |
 | supply-chain compromise | minimal dependencies, exact lockfile, CI audit, OIDC/provenance releases | signed provenance is not a code audit |
 
 ## Read-only enforcement
 
-An allowlist test records every Git operation name, fixed argv prefix, and permitted dynamic slot. Unknown operations fail and no generic Git executor is reachable from a public adapter. A mutator/network denylist is defense in depth, not the primary control. `GIT_OPTIONAL_LOCKS=0` prevents optional index locks, and the project never calls fetch or credential helpers. Read-only means “the program intentionally issues no Git or filesystem writes”; it cannot prevent Git itself or third-party malware from changing files.
+An allowlist test records every Git operation name, fixed argv prefix, and permitted dynamic slot. Unknown operations fail and no generic Git executor is reachable from a public adapter. A mutator/network denylist is defense in depth, not the primary control. `GIT_OPTIONAL_LOCKS=0` prevents optional index locks, and the project never calls fetch or credential helpers. Read-only means “the program intentionally issues no repository or Git-state writes.” Optional AI-result cache writes occur only in the operating system's discardable user-cache directory and never inside the repository.
 
 ## Content exclusions
 
@@ -44,7 +47,7 @@ Full patch mode does not apply the default exclusions or value replacement. Both
 
 ## Future Web AI consent
 
-Before a cloud request, show provider, endpoint origin, model, commit OID, parent comparison, included/excluded files, and exact byte count. Require an explicit user action for every analysis. Do not send in the background, persist keys in localStorage, or cache raw prompts/responses by default.
+Before a cloud request, show provider, endpoint origin, model, commit OID, parent comparison, included/excluded files, and exact byte count. Require an explicit user action for every analysis. Do not send in the background or persist keys in localStorage. Cache only the validated structured result after explicit generation; never cache the raw prompt, raw diff, credentials, absolute paths, or remote URLs. A no-cache control remains mandatory.
 
 Ollama defaults to a loopback URL. Cloud base URLs must use HTTPS and are configured at process startup, never supplied by a browser request.
 
