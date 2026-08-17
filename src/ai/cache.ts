@@ -51,6 +51,7 @@ export interface AiCacheLimits {
 }
 
 export interface AiCacheLookup<T> { key: string; value: T; cacheHit: boolean }
+export interface AiCacheComputeLookup<T> extends AiCacheLookup<T> { cacheStored: boolean; cacheWarning: string | null }
 
 function validateLabel(value: string, field: string): void {
   if (!value || value.length > 160 || /[\u0000-\u001f\u007f]/u.test(value)) {
@@ -150,6 +151,7 @@ export class FileAiCache {
   readonly maxRecordBytes: number;
   readonly pruneIntervalMs: number;
   private readonly inflight = new Map<string, Promise<AiCacheLookup<unknown>>>();
+  private readonly resilientInflight = new Map<string, Promise<AiCacheComputeLookup<unknown>>>();
   private lastPrunedAt = 0;
 
   constructor(root = defaultAiCacheRoot(), limits: AiCacheLimits = {}) {
@@ -215,6 +217,22 @@ export class FileAiCache {
     try { return await pending; } finally { this.inflight.delete(key); }
   }
 
+  async getOrComputeResilient<T>(request: AiCacheRequest, compute: () => Promise<T>): Promise<AiCacheComputeLookup<T>> {
+    const key = aiCacheKey(request); const cached = await this.get<T>(key);
+    if (cached) return { key, value: cached.result, cacheHit: true, cacheStored: true, cacheWarning: null };
+    const existing = this.resilientInflight.get(key);
+    if (existing) return existing as Promise<AiCacheComputeLookup<T>>;
+    const pending = (async (): Promise<AiCacheComputeLookup<T>> => {
+      const secondCheck = await this.get<T>(key);
+      if (secondCheck) return { key, value: secondCheck.result, cacheHit: true, cacheStored: true, cacheWarning: null };
+      const value = await compute();
+      try { await this.put(request, value); return { key, value, cacheHit: false, cacheStored: true, cacheWarning: null }; }
+      catch { return { key, value, cacheHit: false, cacheStored: false, cacheWarning: 'The explanation was generated but could not be cached.' }; }
+    })();
+    this.resilientInflight.set(key, pending as Promise<AiCacheComputeLookup<unknown>>);
+    try { return await pending; } finally { this.resilientInflight.delete(key); }
+  }
+
   private async entries(): Promise<Array<{ filename: string; bytes: number; modifiedMs: number }>> {
     const entries: Array<{ filename: string; bytes: number; modifiedMs: number }> = [];
     try {
@@ -266,6 +284,6 @@ export class FileAiCache {
     for (const entry of entries) {
       try { await unlink(entry.filename); removedEntries += 1; removedBytes += entry.bytes; } catch (error) { if (!isMissing(error)) throw cacheFailure('AI cache entry could not be cleared.', error); }
     }
-    this.inflight.clear(); return { removedEntries, removedBytes };
+    this.inflight.clear(); this.resilientInflight.clear(); return { removedEntries, removedBytes };
   }
 }

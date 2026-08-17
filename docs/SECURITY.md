@@ -5,7 +5,7 @@
 1. The repository and every string stored in Git are untrusted input.
 2. The local browser is authenticated but repository content remains untrusted.
 3. The MCP host controls model invocation; the MCP server controls only bounded Git reads.
-4. Cloud LLMs and official-document sites are external recipients and require separate consent.
+4. Loopback Ollama is a separate recipient and can itself use cloud models; cloud LLMs and official-document sites require separate future consent.
 
 ## Threats and controls
 
@@ -19,6 +19,9 @@
 | data leakage to an MCP model | metadata-only default, no email/absolute paths, content policy at startup | messages and relative paths may be sensitive |
 | patch leakage | patch tool absent by default, explicit startup policy and request | redaction misses secrets |
 | prompt injection from source text | mark evidence untrusted; prompts forbid obeying repository instructions | model behavior cannot be guaranteed |
+| localhost AI request forgery | strict session, mandatory exact Origin and CSRF for POST, 1 KiB body, short-lived server-owned request ID | malware running as the same user |
+| AI provider SSRF or redirection | numeric loopback origin fixed at startup, fixed paths, redirects rejected | compromised local Ollama service |
+| unintended Ollama cloud execution | reject cloud-labelled model names and warn that loopback is not an execution-location guarantee | aliases or future naming can evade detection |
 | cached model output leaks repository context | cache metadata omits raw input/path/URL/key, private cache permissions, bounded entries, explicit clear | generated output itself may repeat confidential text |
 | cache path or symlink redirection | fixed OS cache root, content-addressed filenames, reject symlinked cache root/shards, no request-supplied paths | malware running as the same user |
 | cache corruption or concurrent writes | same-directory temporary file and rename, schema validation, per-key in-process coalescing | cross-process last-writer wins |
@@ -45,11 +48,11 @@ It also replaces common private-key and token-shaped values. The UI and CLI must
 
 Full patch mode does not apply the default exclusions or value replacement. Both patch modes always omit binary/submodule content and honor literal startup exclusion prefixes.
 
-## Future Web AI consent
+## Web AI consent
 
-Before a cloud request, show provider, endpoint origin, model, commit OID, parent comparison, included/excluded files, and exact byte count. Require an explicit user action for every analysis. Do not send in the background or persist keys in localStorage. Cache only the validated structured result after explicit generation; never cache the raw prompt, raw diff, credentials, absolute paths, or remote URLs. A no-cache control remains mandatory.
+Before an Ollama request, show provider, endpoint origin, model, commit OID, parent comparison, included/excluded files, and exact byte count. Require an explicit user action for every analysis. Do not send in the background or persist keys in localStorage. Cache only the validated structured result after explicit generation; never cache the raw prompt, raw diff, credentials, absolute paths, or remote URLs. `--no-ai-cache` bypasses both cache reads and writes.
 
-Ollama defaults to a loopback URL. Cloud base URLs must use HTTPS and are configured at process startup, never supplied by a browser request.
+Ollama accepts only a numeric loopback URL configured at process startup. The application does not pull, create, or delete models. BYOK cloud base URLs are not implemented.
 
 ## Release security gates
 

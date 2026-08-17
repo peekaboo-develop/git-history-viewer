@@ -12,12 +12,12 @@ RepositoryReader core
 AiCache core
 ├── content-addressed split JSON
 ├── CLI status/clear
-└── future Web AI adapters
+└── Web AI result persistence
 
-Optional future adapters
-├── BYOK cloud LLM
-├── loopback Ollama
-└── official-document resolver
+Optional AI adapters
+├── loopback Ollama (implemented)
+├── BYOK cloud LLM (future)
+└── official-document resolver (future)
 ```
 
 The core owns all Git subprocesses, parsing, output limits, repository state generation, and shared data schemas. It has no browser, HTTP-client, MCP, or LLM dependency.
@@ -49,7 +49,7 @@ Each result is a bounded JSON file under a two-hex-character shard. The cache us
 
 The default caps are 50 MiB, 10,000 entries, and 128 KiB per record. Cleanup runs at write time no more than once per process-day and removes oldest recognized entries first. It does not update access time on reads. `cache clear` enumerates and unlinks only files matching the cache shard and filename contract; it never recursively deletes an arbitrary directory.
 
-This cache does not make MCP into an LLM provider. MCP continues to expose bounded Git evidence. A future Web adapter must own the model request and receive the result before it can persist that result.
+This cache does not make MCP into an LLM provider. MCP continues to expose bounded Git evidence. The Web adapter owns the Ollama request and validates the structured result before persistence. `--no-ai-cache` bypasses cache reads and writes.
 
 ## Public Node API
 
@@ -126,6 +126,14 @@ TIMEOUT
 NOT_GIT_REPOSITORY
 GIT_FAILED
 CACHE_FAILED
+AI_DISABLED
+AI_REQUEST_EXPIRED
+AI_QUEUE_FULL
+PROVIDER_MODEL_NOT_FOUND
+PROVIDER_UNAVAILABLE
+PROVIDER_TIMEOUT
+PROVIDER_OUTPUT_INVALID
+PROVIDER_OUTPUT_LIMIT
 ```
 
 ## Web boundary
@@ -164,7 +172,12 @@ GET /api/v1/commits/{oid}/changes
 GET /api/v1/worktrees
 GET /api/v1/unpushed
 GET /api/v1/generation
+GET /api/v1/ai/capabilities
+GET /api/v1/commits/{oid}/explanation-preview
+POST /api/v1/ai/explanations
 ```
+
+AI POST accepts only `{ "requestId": "..." }` from a same-origin authenticated browser with a separate CSRF token. Preview records expire after five minutes and bind the repository generation, provider, model revision, prompt, schema, and exact metadata evidence. The request body is capped at 1 KiB. The browser cannot supply an endpoint, model, prompt, OID, or evidence to POST.
 
 Query contracts:
 

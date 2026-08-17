@@ -3,7 +3,9 @@ export const OID_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 
 export type ErrorCode = 'INVALID_ARGUMENT' | 'INVALID_OID' | 'NOT_FOUND' |
   'STALE_CURSOR' | 'STATE_CHANGED' | 'CONTENT_DISABLED' | 'CONTENT_EXCLUDED' |
-  'OUTPUT_LIMIT' | 'TIMEOUT' | 'NOT_GIT_REPOSITORY' | 'GIT_FAILED' | 'CACHE_FAILED';
+  'OUTPUT_LIMIT' | 'TIMEOUT' | 'NOT_GIT_REPOSITORY' | 'GIT_FAILED' | 'CACHE_FAILED' |
+  'AI_DISABLED' | 'AI_REQUEST_EXPIRED' | 'AI_QUEUE_FULL' | 'PROVIDER_MODEL_NOT_FOUND' |
+  'PROVIDER_UNAVAILABLE' | 'PROVIDER_TIMEOUT' | 'PROVIDER_OUTPUT_INVALID' | 'PROVIDER_OUTPUT_LIMIT';
 
 export interface PublicWarning { code: string; message: string; details: Record<string, string | number | boolean | null> }
 export interface PublicError { code: ErrorCode; message: string; retryable: boolean; details: Record<string, string | number | boolean | null> }
@@ -48,6 +50,23 @@ export interface PatchResult {
   oid: string; parentIndex: number | null; parentOid: string | null; policy: 'redacted' | 'full'; text: string;
   includedPaths: PathValue[]; excludedPaths: Array<{ path: PathValue; reason: string }>;
   byteCount: number; truncated: boolean;
+}
+
+export interface AiExplanation {
+  schemaVersion: '1';
+  summaryJa: string;
+  changes: Array<{ titleJa: string; detailJa: string; evidencePaths: string[] }>;
+  terms: Array<{ term: string; explanationJa: string }>;
+  risks: Array<{ level: 'low' | 'medium' | 'high' | 'unknown'; rationaleJa: string; evidencePaths: string[] }>;
+  testObservations: string[];
+  limitations: string[];
+}
+
+export interface AiEvidenceSummary {
+  subject: string;
+  body: string;
+  comparison: 'root' | 'first-parent';
+  changes: Array<{ state: string; path: string; oldPath: string | null; added: number | null; deleted: number | null }>;
 }
 
 export function success<T>(generation: string, data: T, warnings: PublicWarning[] = []): Envelope<T> {

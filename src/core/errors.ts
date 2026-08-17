@@ -9,7 +9,7 @@ export class ViewerError extends Error {
     super(message, { cause: options.cause });
     this.name = 'ViewerError';
     this.code = code;
-    this.retryable = options.retryable ?? ['TIMEOUT', 'STATE_CHANGED'].includes(code);
+    this.retryable = options.retryable ?? ['TIMEOUT', 'STATE_CHANGED', 'PROVIDER_UNAVAILABLE', 'PROVIDER_TIMEOUT', 'AI_QUEUE_FULL'].includes(code);
     this.details = options.details ?? {};
   }
 

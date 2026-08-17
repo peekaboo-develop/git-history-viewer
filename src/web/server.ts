@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { asViewerError, ViewerError } from '../core/errors.js';
 import type { RepositoryReader } from '../core/repository.js';
+import type { AiExplanationService } from '../ai/service.js';
 import { SCHEMA_VERSION, success } from '../schema/types.js';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -20,6 +21,7 @@ function cookie(request: IncomingMessage, name: string): string | null {
   }
   return null;
 }
+function originHost(value: string): string | null { try { return new URL(value).host; } catch { return null; } }
 function headers(type: string): Record<string, string> {
   return {
     'Content-Type': type, 'Cache-Control': 'no-store',
@@ -35,14 +37,40 @@ function statusFor(code: string): number {
   if (['INVALID_ARGUMENT', 'INVALID_OID'].includes(code)) return 400;
   if (['CONTENT_DISABLED', 'CONTENT_EXCLUDED'].includes(code)) return 403;
   if (['NOT_FOUND', 'NOT_GIT_REPOSITORY'].includes(code)) return 404;
-  if (['STALE_CURSOR', 'STATE_CHANGED'].includes(code)) return 409;
-  if (code === 'OUTPUT_LIMIT') return 413; if (code === 'TIMEOUT') return 504; return 500;
+  if (['STALE_CURSOR', 'STATE_CHANGED', 'AI_REQUEST_EXPIRED'].includes(code)) return 409;
+  if (code === 'AI_QUEUE_FULL') return 429;
+  if (['AI_DISABLED', 'PROVIDER_MODEL_NOT_FOUND', 'PROVIDER_UNAVAILABLE'].includes(code)) return 503;
+  if (['OUTPUT_LIMIT', 'PROVIDER_OUTPUT_LIMIT'].includes(code)) return 413;
+  if (['TIMEOUT', 'PROVIDER_TIMEOUT'].includes(code)) return 504;
+  if (code === 'PROVIDER_OUTPUT_INVALID') return 502;
+  return 500;
 }
 
-export interface ViewerServerOptions { port: number; limit: number; token?: string }
+async function jsonBody(request: IncomingMessage, maximumBytes: number): Promise<Record<string, unknown>> {
+  const declared = request.headers['content-length'];
+  if (declared !== undefined && (!/^\d+$/u.test(declared) || Number(declared) > maximumBytes)) throw new ViewerError('OUTPUT_LIMIT', 'Request body is too large.');
+  const chunks = await new Promise<Buffer[]>((resolve, reject) => {
+    const values: Buffer[] = []; let total = 0; let settled = false;
+    const cleanup = () => { request.off('data', onData); request.off('end', onEnd); request.off('error', onError); };
+    const onData = (chunk: Buffer | string) => {
+      if (settled) return; const value = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk); total += value.length;
+      if (total > maximumBytes) { settled = true; cleanup(); request.resume(); reject(new ViewerError('OUTPUT_LIMIT', 'Request body is too large.')); return; }
+      values.push(value);
+    };
+    const onEnd = () => { if (!settled) { settled = true; cleanup(); resolve(values); } };
+    const onError = (error: Error) => { if (!settled) { settled = true; cleanup(); reject(new ViewerError('INVALID_ARGUMENT', 'Request body could not be read.', { cause: error })); } };
+    request.on('data', onData); request.on('end', onEnd); request.on('error', onError);
+  });
+  let parsed: unknown; try { parsed = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw new ViewerError('INVALID_ARGUMENT', 'Request body must be valid JSON.'); }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new ViewerError('INVALID_ARGUMENT', 'Request body must be a JSON object.');
+  return parsed as Record<string, unknown>;
+}
+
+export interface ViewerServerOptions { port: number; limit: number; token?: string; ai?: AiExplanationService }
 
 export async function createViewerServer(reader: RepositoryReader, options: ViewerServerOptions) {
   const token = options.token ?? randomBytes(32).toString('hex');
+  const csrfToken = randomBytes(32).toString('hex');
   const cookieName = 'git_history_session';
   let actualPort: number | null = null;
   let versionPromise: Promise<string> | null = null;
@@ -64,16 +92,29 @@ export async function createViewerServer(reader: RepositoryReader, options: View
       const host = request.headers.host ?? '';
       if (!allowedHosts.has(host)) return send(response, 421, 'Misdirected request.');
       const origin = request.headers.origin;
-      if (origin && !allowedHosts.has(new URL(origin).host)) return send(response, 403, 'Origin rejected.');
-      if (!['GET', 'HEAD'].includes(request.method ?? '')) return send(response, 405, 'Method not allowed.', undefined, { Allow: 'GET, HEAD' });
+      if (origin && !allowedHosts.has(originHost(origin) ?? '')) return send(response, 403, 'Origin rejected.');
+      if (!['GET', 'HEAD', 'POST'].includes(request.method ?? '')) return send(response, 405, 'Method not allowed.', undefined, { Allow: 'GET, HEAD, POST' });
       const url = new URL(request.url ?? '/', `http://${host}`);
       if (url.pathname === '/' && url.searchParams.has('token')) {
         if (!equalSecret(url.searchParams.get('token'), token)) return send(response, 403, 'Invalid session token.');
         return send(response, 303, '', undefined, { Location: '/', 'Set-Cookie': `${cookieName}=${token}; HttpOnly; SameSite=Strict; Path=/` });
       }
       if (!equalSecret(cookie(request, cookieName), token)) return send(response, 401, 'Session required.');
+      if (request.method === 'POST') {
+        if (url.pathname !== '/api/v1/ai/explanations' || url.search) return send(response, 405, 'Method not allowed.', undefined, { Allow: 'GET, HEAD' });
+        if (origin !== `http://${host}`) return send(response, 403, 'Origin required.');
+        if (!equalSecret(typeof request.headers['x-ghv-csrf'] === 'string' ? request.headers['x-ghv-csrf'] : null, csrfToken)) return send(response, 403, 'CSRF token rejected.');
+        if (request.headers['content-type'] !== 'application/json') return send(response, 415, 'Content-Type must be application/json.');
+        if (!options.ai) throw new ViewerError('AI_DISABLED', 'AI explanation is disabled.');
+        const body = await jsonBody(request, 1024);
+        if (Object.keys(body).length !== 1 || typeof body.requestId !== 'string') throw new ViewerError('INVALID_ARGUMENT', 'Only requestId is accepted.');
+        const data = await options.ai.execute(body.requestId);
+        const warnings = data.warning ? [{ code: 'CACHE_WRITE_FAILED', message: data.warning, details: {} }] : [];
+        return send(response, 200, JSON.stringify(success(await generation(), data, warnings)), 'application/json; charset=utf-8');
+      }
       const gen = await generation();
       const json = (data: unknown) => send(response, 200, JSON.stringify(success(gen, data)), 'application/json; charset=utf-8');
+      if (url.pathname === '/api/v1/ai/capabilities') return json({ ...(options.ai?.capabilities() ?? { enabled: false }), csrfToken });
       if (url.pathname === '/api/v1/repository') return json(await reader.repository());
       if (url.pathname === '/api/v1/status') return json(await reader.status(true));
       if (url.pathname === '/api/v1/refs') return json({ items: await reader.refs(), truncated: false, omittedCount: 0, nextCursor: null });
@@ -87,6 +128,12 @@ export async function createViewerServer(reader: RepositoryReader, options: View
       if (url.pathname === '/api/v1/generation') return json({ generation: gen });
       const changes = url.pathname.match(/^\/api\/v1\/commits\/([0-9a-f]+)\/changes$/u);
       if (changes) return json(await reader.changes(changes[1] ?? '', url.searchParams.has('parentIndex') ? Number(url.searchParams.get('parentIndex')) : null, true));
+      const preview = url.pathname.match(/^\/api\/v1\/commits\/([0-9a-f]+)\/explanation-preview$/u);
+      if (preview) {
+        if (url.search) throw new ViewerError('INVALID_ARGUMENT', 'AI preview does not accept query parameters.');
+        if (!options.ai) throw new ViewerError('AI_DISABLED', 'AI explanation is disabled.');
+        return json(await options.ai.preview(preview[1] ?? ''));
+      }
       const commit = url.pathname.match(/^\/api\/v1\/commits\/([0-9a-f]+)$/u);
       if (commit) return json(await reader.commit(commit[1] ?? ''));
       const asset = staticRoutes.get(url.pathname);

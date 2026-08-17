@@ -89,27 +89,27 @@ git-history-viewer version
 
 ## AI experience
 
-AI output evaluates change evidence, not authors. Prompts recommend this result shape, but a host model cannot be forced to comply:
+AI output evaluates change metadata, not authors. The Web adapter requires and validates this result shape:
 
 ```json
 {
+  "schemaVersion": "1",
   "summaryJa": "",
-  "changes": [],
-  "terms": [{ "term": "", "explanation": "" }],
+  "changes": [{ "titleJa": "", "detailJa": "", "evidencePaths": [] }],
+  "terms": [{ "term": "", "explanationJa": "" }],
   "risks": [{
-    "level": "low|medium|high",
-    "evidence": { "path": "", "hunk": "" },
-    "rationale": "",
-    "uncertainty": ""
+    "level": "low|medium|high|unknown",
+    "rationaleJa": "",
+    "evidencePaths": []
   }],
   "testObservations": [],
   "limitations": []
 }
 ```
 
-Initial AI support is delivered as MCP prompts so the connected host supplies the model and pays its cost. The MCP server itself never calls an LLM. Web UI provider adapters require a separate explicit consent flow and are not part of version 0.1.
+MCP prompts let the connected host supply a model; the MCP server itself never calls an LLM. Separately, the optional Web adapter can call an explicitly configured loopback Ollama model. It is disabled by default, rejects cloud-labelled models, sends metadata only, and requires payload preview plus per-request confirmation. BYOK cloud providers and official-document lookup remain out of scope.
 
-Version 0.1 includes an inactive local AI-result cache foundation for those future adapters. It is content-addressed, bounded, dependency-free, and stored outside repositories in the operating system's discardable user-cache directory. Its metadata never stores raw prompts, diffs, API keys, absolute paths, or remote URLs; generated results can still repeat confidential source text. `cache status` and `cache clear` are available before provider adapters so storage remains inspectable and removable.
+The local AI-result cache is content-addressed, bounded, dependency-free, and stored outside repositories in the operating system's discardable user-cache directory. Its metadata never stores raw prompts, diffs, API keys, absolute paths, or remote URLs; generated results can still repeat confidential source text. `--no-ai-cache` bypasses it, while `cache status` and `cache clear` keep storage inspectable and removable.
 
 ## Release blockers
 

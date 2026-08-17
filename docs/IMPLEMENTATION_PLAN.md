@@ -33,13 +33,13 @@ Gate: manual browser QA, install-from-tarball QA, rollback test, and user approv
 
 ## Phase 4: optional embedded AI
 
-Implement only after MCP usage validates the schemas:
+Loopback Ollama metadata-only MVP implemented; remaining work:
 
 - Use the existing content-addressed `AiCache` boundary; do not couple providers to its file layout.
-- Environment-variable BYOK and loopback Ollama adapters.
-- Preflight payload preview and per-request consent.
-- Strict response schema and output caps.
-- Explicit cache preference, cache-hit indicator, and no-cache execution path.
+- Add environment-variable BYOK only after provider-specific security review.
+- Keep the implemented preflight payload preview and per-request consent contract.
+- Keep strict response schema and output caps.
+- Add a browser preference if per-request no-cache behavior proves necessary; startup `--no-ai-cache` already bypasses storage.
 - Do not depend on MCP client sampling; MCP remains the evidence/tool integration.
 - Separate fact/evidence and model-opinion presentation.
 

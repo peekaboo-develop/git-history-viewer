@@ -6,8 +6,10 @@ MCP clients may send returned data to their configured model provider. Commit me
 
 Redaction is best effort and is not a guarantee that a patch contains no secret or private information.
 
-## Optional AI-result cache
+## Optional Web AI and result cache
 
-The cache foundation is local and inactive until an AI adapter explicitly uses it. It stores generated results plus provider, model, operation, language, and prompt-version labels. Cache metadata does not store API keys, raw prompts, diffs, absolute repository paths, or remote URLs. Generated text can still repeat confidential repository information, so users can disable caching in future AI adapters and can remove all recognized entries with `git-history-viewer cache clear`.
+Web AI is disabled by default. When explicitly started with `--ollama-model`, the browser previews the exact commit message and relative changed paths before a second action sends them to loopback Ollama. Patches, file contents, identities, absolute paths, refs, remotes, and commit IDs are excluded. Secret-looking paths and common token shapes are filtered, but commit messages and filenames can still be confidential. A loopback endpoint does not guarantee local execution because Ollama configuration and model choice control the execution location; cloud-labelled model names are rejected by this application.
+
+The cache stores validated generated results plus provider, model, operation, language, and prompt-version labels. Cache metadata does not store API keys, raw prompts, diffs, absolute repository paths, or remote URLs. Generated text can still repeat confidential repository information. Use `--no-ai-cache` to bypass cache reads and writes, and `git-history-viewer cache clear` to remove recognized entries.
 
 Cache files are placed in the operating system's discardable per-user cache directory, use private POSIX permissions where supported, and may be deleted by the operating system at any time.

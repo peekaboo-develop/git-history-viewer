@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { FileAiCache } from '../ai/cache.js';
+import { OllamaProvider } from '../ai/ollama.js';
+import { AiExplanationService } from '../ai/service.js';
 import { asViewerError, ViewerError } from '../core/errors.js';
 import { openRepository, type RepositoryOptions } from '../core/repository.js';
 import { runMcpServer } from '../mcp/server.js';
@@ -10,7 +12,7 @@ import { createViewerServer } from '../web/server.js';
 interface Parsed { command: string; positional: string[]; options: Map<string, string[]>; flags: Set<string> }
 function parse(argv: string[]): Parsed {
   const command = argv.shift() ?? 'help'; const positional: string[] = []; const options = new Map<string, string[]>(); const flags = new Set<string>();
-  const valueOptions = new Set(['repo', 'port', 'limit', 'content-policy', 'exclude-path', 'parent-index']);
+  const valueOptions = new Set(['repo', 'port', 'limit', 'content-policy', 'exclude-path', 'parent-index', 'ollama-model', 'ollama-origin']);
   while (argv.length) {
     const item = argv.shift() ?? '';
     if (!item.startsWith('--')) { positional.push(item); continue; }
@@ -42,7 +44,7 @@ function openBrowser(url: string): void {
   spawn(command, args, { shell: false, detached: true, stdio: 'ignore' }).unref();
 }
 function help(): void {
-  process.stdout.write(`Git History Viewer\n\nCommands:\n  web [repo] [--port 0|PORT] [--limit N] [--no-open]\n  mcp --repo PATH [--content-policy metadata|redacted|full] [--exclude-path PREFIX]\n  inspect repository|status|refs|commits|commit|changes [OID] [--repo PATH] [--json]\n  cache status|clear [--json]\n  doctor [repo] [--json]\n  version\n`);
+  process.stdout.write(`Git History Viewer\n\nCommands:\n  web [repo] [--port 0|PORT] [--limit N] [--no-open] [--ollama-model MODEL] [--ollama-origin http://127.0.0.1:11434] [--no-ai-cache]\n  mcp --repo PATH [--content-policy metadata|redacted|full] [--exclude-path PREFIX]\n  inspect repository|status|refs|commits|commit|changes [OID] [--repo PATH] [--json]\n  cache status|clear [--json]\n  doctor [repo] [--json]\n  version\n`);
 }
 async function main(): Promise<void> {
   const parsed = parse(process.argv.slice(2));
@@ -73,9 +75,12 @@ async function main(): Promise<void> {
   if (parsed.command === 'web') {
     const port = Number(option(parsed, 'port') ?? 8449); const limit = Number(option(parsed, 'limit') ?? 200);
     if (!Number.isInteger(port) || port < 0 || port > 65_535) throw new ViewerError('INVALID_ARGUMENT', 'Port must be between 0 and 65535.');
-    const viewer = await createViewerServer(reader, { port, limit });
+    const ollamaModel = option(parsed, 'ollama-model'); const ollamaOrigin = option(parsed, 'ollama-origin');
+    if (ollamaOrigin && !ollamaModel) throw new ViewerError('INVALID_ARGUMENT', '--ollama-origin requires --ollama-model.');
+    const ai = ollamaModel ? new AiExplanationService(reader, new OllamaProvider({ model: ollamaModel, ...(ollamaOrigin ? { origin: ollamaOrigin } : {}) }), new FileAiCache(), !parsed.flags.has('no-ai-cache')) : undefined;
+    const viewer = await createViewerServer(reader, { port, limit, ...(ai ? { ai } : {}) });
     try { await viewer.listen(); } catch (error) { if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') throw new ViewerError('INVALID_ARGUMENT', `Port ${port} is already in use.`); throw error; }
-    process.stdout.write(`Git History Viewer: ${viewer.url}\nRepository: ${path.basename(reader.root)}\nRead-only mode. Remote refs are never fetched.\n`);
+    process.stdout.write(`Git History Viewer: ${viewer.url}\nRepository: ${path.basename(reader.root)}\nRead-only mode. Remote refs are never fetched.\n${ai ? `AI: loopback Ollama (${ai.provider.model} at ${ai.provider.origin})\n` : 'AI: disabled\n'}`);
     if (!parsed.flags.has('no-open')) openBrowser(viewer.url);
     const shutdown = () => viewer.close().finally(() => process.exit(0)); process.once('SIGINT', shutdown); process.once('SIGTERM', shutdown); return;
   }
