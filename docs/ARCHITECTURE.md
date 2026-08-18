@@ -19,7 +19,7 @@ Optional AI adapters
 ├── OpenAI Responses API (implemented)
 ├── Anthropic Messages API (implemented)
 ├── other official remote adapters, one provider at a time (future)
-└── official-document resolver (fixed registry + consented pinned HTTPS retrieval)
+└── official-document resolver (fixed registry + consented pinned HTTPS retrieval + separately consented grounded AI)
 ```
 
 The core owns all Git subprocesses, parsing, output limits, repository state generation, and shared data schemas. It has no browser, HTTP-client, MCP, or LLM dependency.
@@ -183,15 +183,20 @@ GET /api/v1/generation
 GET /api/v1/ai/capabilities
 GET /api/v1/mcp/guides
 GET /api/v1/commits/{oid}/explanation-preview
+GET /api/v1/commits/{oid}/official-docs
+GET /api/v1/commits/{oid}/grounded-explanation-preview
 POST /api/v1/ai/explanations
+POST /api/v1/docs/fetch
+POST /api/v1/ai/grounded-explanations
 ```
 
-AI POST accepts only `{ "requestId": "..." }` from a same-origin authenticated browser with a separate CSRF token. Preview records expire after five minutes and bind the repository generation, provider, model revision, prompt, schema, and exact metadata evidence. The request body is capped at 1 KiB. The browser cannot supply an endpoint, model, prompt, OID, or evidence to POST.
+Every POST accepts only `{ "requestId": "..." }` from a same-origin authenticated browser with a separate CSRF token. Preview records expire after five minutes and bind the repository generation and exact operation inputs. AI records also bind provider, model revision, prompt, schema, and exact evidence. Request bodies are capped at 1 KiB. The browser cannot supply an endpoint, model, prompt, OID, evidence, excerpt, citation, or document set to POST.
 
 Query contracts:
 
 - `/commits?limit=1..200&cursor=<opaque>`; absent limit is 50.
 - `/commits/{oid}/changes?parentIndex=<integer>`; absence uses the parent-selection rules.
+- `/commits/{oid}/grounded-explanation-preview?documentSetId=<opaque>&profile=<id>`; documentSetId is required and profile is optional.
 - `/refs?kind=local&kind=remote&kind=tag`; absence means all kinds.
 - `/unpushed?limit=1..200&cursor=<opaque>`; it has no branch selector in version 0.1.
 - Unknown, repeated singleton, malformed, or unsupported parameters return `INVALID_ARGUMENT`.

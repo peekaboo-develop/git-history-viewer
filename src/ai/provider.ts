@@ -1,4 +1,4 @@
-import type { AiEvidenceSummary, AiExplanation } from '../schema/types.js';
+import type { AiEvidenceSummary, AiExplanation, GroundedAiEvidence, GroundedAiExplanation } from '../schema/types.js';
 
 export type AiProviderId = 'ollama' | 'openai' | 'anthropic' | 'google';
 
@@ -21,4 +21,6 @@ export interface AiProvider {
   canonicalRequest(evidence: AiEvidenceSummary, cacheIdentity: string): unknown;
   notice(): string;
   generate(evidence: AiEvidenceSummary): Promise<AiExplanation>;
+  canonicalGroundedRequest(evidence: GroundedAiEvidence, cacheIdentity: string): unknown;
+  generateGrounded(evidence: GroundedAiEvidence): Promise<GroundedAiExplanation>;
 }

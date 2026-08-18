@@ -25,6 +25,7 @@ test('web server binds loopback and enforces session, host, origin, and method',
   const page = await request(port, '/', { headers: { Cookie: session } }); assert.equal(page.status, 200); assert.match(String(page.headers['content-security-policy'] ?? ''), /frame-ancestors 'none'/u);
   const topology = await request(port, '/topology.js', { headers: { Cookie: session } });
   assert.equal(topology.status, 200); assert.match(topology.body, /buildTopology/u); assert.doesNotMatch(topology.body, /innerHTML/u);
+  const app = await request(port, '/app.js', { headers: { Cookie: session } }); assert.equal(app.status, 200); assert.match(app.body, /コミット情報/u); assert.match(app.body, /公式資料の抜粋/u); assert.match(app.body, /対象.*除外.*一部省略/u);
   const guides = await request(port, '/api/v1/mcp/guides', { headers: { Cookie: session } });
   assert.equal(guides.status, 200); assert.match(guides.body, /codex mcp add/u); assert.match(guides.body, /FULL_COMMIT_OID/u);
   assert.doesNotMatch(guides.body, new RegExp(data.repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'u'));
@@ -41,8 +42,10 @@ test('AI POST requires exact origin, CSRF, content type, and bounded requestId b
     capabilities: () => ({ enabled: true as const, profiles: [{ profileId: 'test', label: 'Test', providerId: 'ollama' as const, endpointOrigin: 'http://127.0.0.1:11434', model: 'test', locality: 'loopback' as const, adapterVersion: 'test-v1', structuredOutput: 'required-native' as const, maxInputBytes: 16384, maxOutputTokens: 1536 }], defaultProfileId: 'test', policy: 'metadata-only' }),
     preview: async (_oid: string, profile: string | null | undefined) => { previewProfiles.push(profile); return { requestId: 'b'.repeat(32) }; },
     execute: async () => ({ explanation: { schemaVersion: '1' as const, summaryJa: 'ok', changes: [], terms: [], risks: [], testObservations: [], limitations: [] }, cache: { hit: false, stored: true }, warning: null }),
+    previewGrounded: async () => ({ requestId: 'd'.repeat(32) }),
+    executeGrounded: async () => ({ explanation: { schemaVersion: '1' as const, summaryJa: 'ok', changes: [], terms: [], risks: [], testObservations: [], limitations: [], citations: [] }, citationTargets: [], cache: { hit: false, stored: true }, warning: null }),
   };
-  const docsRequests: string[] = []; const fakeDocs = { preview: async () => ({ requestId: 'c'.repeat(32), items: [], networkAccessed: false as const, versionDetection: 'unavailable' as const, limits: { pages: 2 as const, rawBytesPerPage: 1048576, excerptBytesPerPage: 4096 } }), execute: async (requestId: string) => { docsRequests.push(requestId); return { documents: [], failures: [] }; } };
+  const docsRequests: string[] = []; const fakeDocs = { preview: async () => ({ requestId: 'c'.repeat(32), items: [], networkAccessed: false as const, versionDetection: 'unavailable' as const, limits: { pages: 2 as const, rawBytesPerPage: 1048576, excerptBytesPerPage: 4096 } }), execute: async (requestId: string) => { docsRequests.push(requestId); return { documentSetId: null, documentSetExpiresAt: null, documents: [], failures: [] }; }, forAi: async () => ({ generation: 'g1', documents: [], citationTargets: [] }) };
   const viewer = await createViewerServer(reader, { port: 0, limit: 50, token: 'a'.repeat(64), ai: fakeAi as never, docs: fakeDocs }); await viewer.listen();
   t.after(() => viewer.close()); const port = viewer.port ?? 0;
   const login = await request(port, `/?token=${'a'.repeat(64)}`); const session = (login.headers['set-cookie']?.[0] ?? '').split(';')[0] ?? '';
@@ -51,12 +54,16 @@ test('AI POST requires exact origin, CSRF, content type, and bounded requestId b
   assert.equal((await request(port, `/api/v1/commits/${data.unsafe}/explanation-preview?profile=test`, { headers: { Cookie: session } })).status, 200); assert.deepEqual(previewProfiles, ['test']);
   assert.equal((await request(port, `/api/v1/commits/${data.unsafe}/explanation-preview?profile=test&profile=other`, { headers: { Cookie: session } })).status, 400);
   assert.equal((await request(port, `/api/v1/commits/${data.unsafe}/explanation-preview?model=evil`, { headers: { Cookie: session } })).status, 400);
+  assert.equal((await request(port, `/api/v1/commits/${data.unsafe}/grounded-explanation-preview?profile=test&documentSetId=${'e'.repeat(32)}`, { headers: { Cookie: session } })).status, 200);
+  assert.equal((await request(port, `/api/v1/commits/${data.unsafe}/grounded-explanation-preview?profile=test`, { headers: { Cookie: session } })).status, 400);
   assert.equal((await request(port, '/api/v1/ai/explanations', { method: 'POST', headers: { ...base, Origin: '' }, body: JSON.stringify({ requestId: 'b'.repeat(32) }) })).status, 403);
   assert.equal((await request(port, '/api/v1/ai/explanations', { method: 'POST', headers: { ...base, 'X-GHV-CSRF': 'wrong' }, body: JSON.stringify({ requestId: 'b'.repeat(32) }) })).status, 403);
   assert.equal((await request(port, '/api/v1/ai/explanations', { method: 'POST', headers: { ...base, 'Content-Type': 'text/plain' }, body: '{}' })).status, 415);
   assert.equal((await request(port, '/api/v1/ai/explanations', { method: 'POST', headers: { ...base, 'Transfer-Encoding': 'chunked' }, body: 'x'.repeat(1025) })).status, 413);
   assert.equal((await request(port, '/api/v1/ai/explanations', { method: 'POST', headers: base, body: JSON.stringify({ requestId: 'b'.repeat(32), model: 'evil' }) })).status, 400);
   assert.equal((await request(port, '/api/v1/ai/explanations', { method: 'POST', headers: base, body: JSON.stringify({ requestId: 'b'.repeat(32) }) })).status, 200);
+  assert.equal((await request(port, '/api/v1/ai/grounded-explanations', { method: 'POST', headers: base, body: JSON.stringify({ requestId: 'd'.repeat(32) }) })).status, 200);
+  assert.equal((await request(port, '/api/v1/ai/grounded-explanations', { method: 'POST', headers: base, body: JSON.stringify({ requestId: 'd'.repeat(32), documentSetId: 'evil' }) })).status, 400);
   assert.equal((await request(port, '/api/v1/docs/fetch', { method: 'POST', headers: base, body: JSON.stringify({ requestId: 'c'.repeat(32) }) })).status, 200); assert.deepEqual(docsRequests, ['c'.repeat(32)]);
   assert.equal((await request(port, '/api/v1/docs/fetch', { method: 'POST', headers: { ...base, 'X-GHV-CSRF': 'wrong' }, body: JSON.stringify({ requestId: 'c'.repeat(32) }) })).status, 403);
 });

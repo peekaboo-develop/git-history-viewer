@@ -1,6 +1,6 @@
 import { ViewerError } from '../core/errors.js';
-import type { AiEvidenceSummary, AiExplanation } from '../schema/types.js';
-import { AI_OUTPUT_SCHEMA, AI_PROMPT_VERSION, AI_SYSTEM_PROMPT, validateExplanation } from './explanation-schema.js';
+import type { AiEvidenceSummary, AiExplanation, GroundedAiEvidence, GroundedAiExplanation } from '../schema/types.js';
+import { AI_OUTPUT_SCHEMA, AI_PROMPT_VERSION, AI_SYSTEM_PROMPT, GROUNDED_AI_OUTPUT_SCHEMA, GROUNDED_AI_PROMPT_VERSION, GROUNDED_AI_SYSTEM_PROMPT, validateExplanation, validateGroundedExplanation } from './explanation-schema.js';
 import type { AiProvider, AiProviderDescriptor } from './provider.js';
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages';
@@ -50,12 +50,20 @@ export class AnthropicProvider implements AiProvider {
   request(evidence: AiEvidenceSummary): Record<string, unknown> {
     return { model: this.descriptor.model, max_tokens: this.descriptor.maxOutputTokens, system: AI_SYSTEM_PROMPT, messages: [{ role: 'user', content: JSON.stringify(evidence) }], output_config: { format: { type: 'json_schema', schema: AI_OUTPUT_SCHEMA } } };
   }
+  groundedRequest(evidence: GroundedAiEvidence): Record<string, unknown> {
+    return { model: this.descriptor.model, max_tokens: this.descriptor.maxOutputTokens, system: GROUNDED_AI_SYSTEM_PROMPT, messages: [{ role: 'user', content: JSON.stringify(evidence) }], output_config: { format: { type: 'json_schema', schema: GROUNDED_AI_OUTPUT_SCHEMA } } };
+  }
   canonicalRequest(evidence: AiEvidenceSummary, cacheIdentity: string): unknown {
     return { promptVersion: AI_PROMPT_VERSION, provider: 'anthropic', adapterVersion: this.descriptor.adapterVersion, apiVersion: API_VERSION, cacheIdentity, request: this.request(evidence) };
   }
-  async generate(evidence: AiEvidenceSummary): Promise<AiExplanation> {
-    const body = JSON.stringify(this.request(evidence));
-    if (Buffer.byteLength(body) > 32 * 1024) throw new ViewerError('OUTPUT_LIMIT', 'The AI provider request is too large.');
+  canonicalGroundedRequest(evidence: GroundedAiEvidence, cacheIdentity: string): unknown {
+    return { promptVersion: GROUNDED_AI_PROMPT_VERSION, provider: 'anthropic', adapterVersion: this.descriptor.adapterVersion, apiVersion: API_VERSION, cacheIdentity, request: this.groundedRequest(evidence) };
+  }
+  generate(evidence: AiEvidenceSummary): Promise<AiExplanation> { return this.generateWith(evidence, false) as Promise<AiExplanation>; }
+  generateGrounded(evidence: GroundedAiEvidence): Promise<GroundedAiExplanation> { return this.generateWith(evidence, true) as Promise<GroundedAiExplanation>; }
+  private async generateWith(evidence: AiEvidenceSummary | GroundedAiEvidence, grounded: boolean): Promise<AiExplanation | GroundedAiExplanation> {
+    const body = JSON.stringify(grounded ? this.groundedRequest(evidence as GroundedAiEvidence) : this.request(evidence));
+    if (Buffer.byteLength(body) > 48 * 1024) throw new ViewerError('OUTPUT_LIMIT', 'The AI provider request is too large.');
     let response: Response;
     try { response = await this.fetchImpl(ENDPOINT, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(this.timeoutMs), headers: { 'x-api-key': this.apiKey, 'anthropic-version': API_VERSION, 'content-type': 'application/json' }, body }); }
     catch (error) {
@@ -70,6 +78,7 @@ export class AnthropicProvider implements AiProvider {
     if (value.stop_reason !== 'end_turn') throw new ViewerError('PROVIDER_OUTPUT_INVALID', 'Anthropic did not complete the explanation.');
     if (value.content.length !== 1 || !record(value.content[0]) || value.content[0].type !== 'text' || typeof value.content[0].text !== 'string') throw new ViewerError('PROVIDER_OUTPUT_INVALID', 'Anthropic returned unexpected content.');
     let parsed: unknown; try { parsed = JSON.parse(value.content[0].text); } catch { throw new ViewerError('PROVIDER_OUTPUT_INVALID', 'Anthropic returned invalid structured output.'); }
-    return validateExplanation(parsed, new Set(evidence.changes.flatMap((item) => item.oldPath ? [item.path, item.oldPath] : [item.path])));
+    const paths = new Set(evidence.changes.flatMap((item) => item.oldPath ? [item.path, item.oldPath] : [item.path]));
+    return grounded ? validateGroundedExplanation(parsed, paths, new Set((evidence as GroundedAiEvidence).officialDocuments.map((item) => item.citationId))) : validateExplanation(parsed, paths);
   }
 }

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { asViewerError, ViewerError } from '../core/errors.js';
 import type { RepositoryReader } from '../core/repository.js';
 import type { AiRuntime } from '../ai/registry.js';
-import { OfficialDocsService, type OfficialDocsPreview, type OfficialDocsResult } from '../docs/service.js';
+import { OfficialDocsService, type GroundingContext, type OfficialDocsPreview, type OfficialDocsResult } from '../docs/service.js';
 import { commitPrompt, MCP_CLIENT_GUIDES, MCP_RESOURCES } from '../mcp/guides.js';
 import { SCHEMA_VERSION, success } from '../schema/types.js';
 
@@ -68,7 +68,7 @@ async function jsonBody(request: IncomingMessage, maximumBytes: number): Promise
   return parsed as Record<string, unknown>;
 }
 
-export interface OfficialDocsRuntime { preview(oid: string): Promise<OfficialDocsPreview>; execute(requestId: string): Promise<OfficialDocsResult> }
+export interface OfficialDocsRuntime { preview(oid: string): Promise<OfficialDocsPreview>; execute(requestId: string): Promise<OfficialDocsResult>; forAi(oid: string, documentSetId: string): Promise<GroundingContext> }
 export interface ViewerServerOptions { port: number; limit: number; token?: string; ai?: AiRuntime; docs?: OfficialDocsRuntime }
 
 export async function createViewerServer(reader: RepositoryReader, options: ViewerServerOptions) {
@@ -105,7 +105,7 @@ export async function createViewerServer(reader: RepositoryReader, options: View
       }
       if (!equalSecret(cookie(request, cookieName), token)) return send(response, 401, 'Session required.');
       if (request.method === 'POST') {
-        if (!['/api/v1/ai/explanations', '/api/v1/docs/fetch'].includes(url.pathname) || url.search) return send(response, 405, 'Method not allowed.', undefined, { Allow: 'GET, HEAD' });
+        if (!['/api/v1/ai/explanations', '/api/v1/ai/grounded-explanations', '/api/v1/docs/fetch'].includes(url.pathname) || url.search) return send(response, 405, 'Method not allowed.', undefined, { Allow: 'GET, HEAD' });
         if (origin !== `http://${host}`) return send(response, 403, 'Origin required.');
         if (!equalSecret(typeof request.headers['x-ghv-csrf'] === 'string' ? request.headers['x-ghv-csrf'] : null, csrfToken)) return send(response, 403, 'CSRF token rejected.');
         if (request.headers['content-type'] !== 'application/json') return send(response, 415, 'Content-Type must be application/json.');
@@ -116,7 +116,7 @@ export async function createViewerServer(reader: RepositoryReader, options: View
           return send(response, 200, JSON.stringify(success(await generation(), data)), 'application/json; charset=utf-8');
         }
         if (!options.ai) throw new ViewerError('AI_DISABLED', 'AI explanation is disabled.');
-        const data = await options.ai.execute(body.requestId);
+        const data = url.pathname === '/api/v1/ai/grounded-explanations' ? await options.ai.executeGrounded(body.requestId) : await options.ai.execute(body.requestId);
         const warnings = data.warning ? [{ code: 'CACHE_WRITE_FAILED', message: data.warning, details: {} }] : [];
         return send(response, 200, JSON.stringify(success(await generation(), data, warnings)), 'application/json; charset=utf-8');
       }
@@ -150,6 +150,13 @@ export async function createViewerServer(reader: RepositoryReader, options: View
         if ([...url.searchParams.keys()].some((key) => key !== 'profile') || url.searchParams.getAll('profile').length > 1) throw new ViewerError('INVALID_ARGUMENT', 'AI preview accepts only one profile parameter.');
         if (!options.ai) throw new ViewerError('AI_DISABLED', 'AI explanation is disabled.');
         return json(await options.ai.preview(preview[1] ?? '', url.searchParams.get('profile')));
+      }
+      const groundedPreview = url.pathname.match(/^\/api\/v1\/commits\/([0-9a-f]+)\/grounded-explanation-preview$/u);
+      if (groundedPreview) {
+        if ([...url.searchParams.keys()].some((key) => !['profile', 'documentSetId'].includes(key)) || url.searchParams.getAll('profile').length > 1 || url.searchParams.getAll('documentSetId').length !== 1) throw new ViewerError('INVALID_ARGUMENT', 'Grounded AI preview requires one documentSetId and at most one profile.');
+        if (!options.ai) throw new ViewerError('AI_DISABLED', 'AI explanation is disabled.');
+        const oid = groundedPreview[1] ?? ''; const context = await docs.forAi(oid, url.searchParams.get('documentSetId') ?? '');
+        return json(await options.ai.previewGrounded(oid, context, url.searchParams.get('profile')));
       }
       const commit = url.pathname.match(/^\/api\/v1\/commits\/([0-9a-f]+)$/u);
       if (commit) return json(await reader.commit(commit[1] ?? ''));

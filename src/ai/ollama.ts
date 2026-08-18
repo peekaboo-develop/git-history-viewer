@@ -1,6 +1,6 @@
 import { ViewerError } from '../core/errors.js';
-import type { AiEvidenceSummary, AiExplanation } from '../schema/types.js';
-import { AI_OUTPUT_SCHEMA, AI_PROMPT_VERSION, AI_SYSTEM_PROMPT, validateExplanation } from './explanation-schema.js';
+import type { AiEvidenceSummary, AiExplanation, GroundedAiEvidence, GroundedAiExplanation } from '../schema/types.js';
+import { AI_OUTPUT_SCHEMA, AI_PROMPT_VERSION, AI_SYSTEM_PROMPT, GROUNDED_AI_OUTPUT_SCHEMA, GROUNDED_AI_PROMPT_VERSION, GROUNDED_AI_SYSTEM_PROMPT, validateExplanation, validateGroundedExplanation } from './explanation-schema.js';
 import type { AiProvider, AiProviderDescriptor } from './provider.js';
 
 const MAX_RESPONSE_BYTES = 256 * 1024;
@@ -59,15 +59,24 @@ export class OllamaProvider implements AiProvider {
   canonicalRequest(evidence: AiEvidenceSummary, cacheIdentity: string): unknown {
     return { promptVersion: AI_PROMPT_VERSION, provider: this.descriptor.providerId, adapterVersion: this.descriptor.adapterVersion, model: this.model, cacheIdentity, system: AI_SYSTEM_PROMPT, evidence, schema: AI_OUTPUT_SCHEMA, settings: { temperature: 0, maxOutputTokens: this.descriptor.maxOutputTokens, think: false } };
   }
+  canonicalGroundedRequest(evidence: GroundedAiEvidence, cacheIdentity: string): unknown {
+    return { promptVersion: GROUNDED_AI_PROMPT_VERSION, provider: this.descriptor.providerId, adapterVersion: this.descriptor.adapterVersion, model: this.model, cacheIdentity, system: GROUNDED_AI_SYSTEM_PROMPT, evidence, schema: GROUNDED_AI_OUTPUT_SCHEMA, settings: { temperature: 0, maxOutputTokens: this.descriptor.maxOutputTokens, think: false } };
+  }
   request(evidence: AiEvidenceSummary): Record<string, unknown> {
     return { model: this.model, messages: [{ role: 'system', content: AI_SYSTEM_PROMPT }, { role: 'user', content: JSON.stringify(evidence) }], format: AI_OUTPUT_SCHEMA, stream: false, think: false, keep_alive: 0, options: { temperature: 0, num_predict: this.descriptor.maxOutputTokens } };
   }
-  async generate(evidence: AiEvidenceSummary): Promise<AiExplanation> {
-    const body = JSON.stringify(this.request(evidence));
-    if (Buffer.byteLength(body) > 32 * 1024) throw new ViewerError('OUTPUT_LIMIT', 'The AI provider request is too large.');
+  groundedRequest(evidence: GroundedAiEvidence): Record<string, unknown> {
+    return { model: this.model, messages: [{ role: 'system', content: GROUNDED_AI_SYSTEM_PROMPT }, { role: 'user', content: JSON.stringify(evidence) }], format: GROUNDED_AI_OUTPUT_SCHEMA, stream: false, think: false, keep_alive: 0, options: { temperature: 0, num_predict: this.descriptor.maxOutputTokens } };
+  }
+  generate(evidence: AiEvidenceSummary): Promise<AiExplanation> { return this.generateWith(evidence, false) as Promise<AiExplanation>; }
+  generateGrounded(evidence: GroundedAiEvidence): Promise<GroundedAiExplanation> { return this.generateWith(evidence, true) as Promise<GroundedAiExplanation>; }
+  private async generateWith(evidence: AiEvidenceSummary | GroundedAiEvidence, grounded: boolean): Promise<AiExplanation | GroundedAiExplanation> {
+    const body = JSON.stringify(grounded ? this.groundedRequest(evidence as GroundedAiEvidence) : this.request(evidence));
+    if (Buffer.byteLength(body) > 48 * 1024) throw new ViewerError('OUTPUT_LIMIT', 'The AI provider request is too large.');
     const value = await this.call('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
     if (!record(value) || !record(value.message) || typeof value.message.content !== 'string') throw new ViewerError('PROVIDER_OUTPUT_INVALID', 'Ollama returned an invalid chat response.');
     let parsed: unknown; try { parsed = JSON.parse(value.message.content); } catch { throw new ViewerError('PROVIDER_OUTPUT_INVALID', 'Ollama returned invalid structured output.'); }
-    return validateExplanation(parsed, new Set(evidence.changes.flatMap((item) => item.oldPath ? [item.path, item.oldPath] : [item.path])));
+    const paths = new Set(evidence.changes.flatMap((item) => item.oldPath ? [item.path, item.oldPath] : [item.path]));
+    return grounded ? validateGroundedExplanation(parsed, paths, new Set((evidence as GroundedAiEvidence).officialDocuments.map((item) => item.citationId))) : validateExplanation(parsed, paths);
   }
 }

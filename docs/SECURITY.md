@@ -57,7 +57,11 @@ Ollama accepts only a numeric loopback URL configured at process startup. The ap
 
 ## Official document consent
 
-Path detection and link display perform no network access. A separate same-origin, CSRF-protected POST with a short-lived server-owned request ID is required before retrieval. The pinned HTTPS transport ignores proxy environment variables, sends no cookies, authorization, or referrer, rejects redirects and compression, and caps DNS answers, connection time, total time, raw bytes, pages, and extracted text. HTML is parsed locally; active and navigational elements are excluded. Retrieved excerpts are untrusted data and are not yet part of the LLM request.
+Path detection and link display perform no network access. A separate same-origin, CSRF-protected POST with a short-lived server-owned request ID is required before retrieval. The pinned HTTPS transport ignores proxy environment variables, sends no cookies, authorization, or referrer, rejects redirects and compression, and caps DNS answers, connection time, total time, raw bytes, pages, and extracted text. HTML is parsed locally; active and navigational elements are excluded. Retrieved excerpts remain untrusted data.
+
+Successful excerpts are placed in a bounded five-minute in-memory document set bound to the full commit OID and repository generation. The browser cannot submit excerpt text, titles, URLs, citation IDs, or a document set in an AI POST. A separate grounded-preview GET resolves the server-owned set and displays the exact combined evidence; a second request-ID-only POST is required to contact the selected provider. The model receives excerpt text and stable citation IDs only. Model-returned IDs are allowlist-validated, and clickable titles and URLs are reconstructed from the compiled registry rather than model output. Grounded and metadata-only schemas, prompts, endpoints, and cache keys remain separate.
+
+Canonical AI evidence is capped at 16 KiB and provider wire JSON at 48 KiB to account for structured-output schemas and JSON escaping. All enabled profiles and both metadata/grounded operations share one process-wide queue with one active request and at most four waiting requests.
 
 ## Release security gates
 

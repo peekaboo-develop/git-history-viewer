@@ -69,6 +69,20 @@ export interface AiEvidenceSummary {
   changes: Array<{ state: string; path: string; oldPath: string | null; added: number | null; deleted: number | null }>;
 }
 
+export interface GroundedAiEvidence extends AiEvidenceSummary {
+  officialDocuments: Array<{ citationId: string; excerpt: string }>;
+}
+
+export interface GroundedAiExplanation extends AiExplanation {
+  citations: Array<{ citationId: string; supportsJa: string }>;
+}
+
+export interface CitationTarget {
+  citationId: string;
+  title: string;
+  url: string;
+}
+
 export function success<T>(generation: string, data: T, warnings: PublicWarning[] = []): Envelope<T> {
   return { schemaVersion: SCHEMA_VERSION, generation, data, warnings };
 }

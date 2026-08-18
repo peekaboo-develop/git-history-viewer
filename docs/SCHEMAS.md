@@ -214,7 +214,11 @@ Before 1.0, compatible additions may add optional fields. Removing fields, chang
 | AI explanation | validated `AiExplanation`, cache status, and optional cache-write warning |
 | official docs preview | version-neutral registry items, short-lived request ID, and fixed retrieval limits; no network access |
 | official docs fetch | bounded server-owned excerpts and per-item safe failure codes |
+| grounded AI preview | exact combined commit/excerpt evidence, server-owned citation targets, provider and byte-count metadata |
+| grounded AI explanation | separate strict explanation schema with validated citation IDs and server-owned target mapping |
 | cache status | `{ entries: number; bytes: number; oldestModifiedAt: IsoDate \| null; newestModifiedAt: IsoDate \| null }` |
 | cache clear | `{ removedEntries: number; removedBytes: number }` |
 
 Cache CLI JSON uses the normal envelope with the fixed generation marker `cache-v1`. Cache records themselves are private implementation data and are not part of the public transport schema.
+
+Grounded output adds `citations: Array<{ citationId, supportsJa }>` to the explanation body. `citationId` must exactly match one of the at-most-two IDs in the previewed `officialDocuments`; duplicates and model-generated URLs or titles are invalid. The execution response returns `citationTargets: Array<{ citationId, title, url }>` only for cited IDs, with title and URL reconstructed from the compiled registry. Metadata-only `AiExplanation` remains unchanged.

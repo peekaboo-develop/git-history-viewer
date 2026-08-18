@@ -56,10 +56,14 @@ test('fetcher fails closed for redirects, compression, and unsupported content',
 test('docs service binds preview to generation and coalesces duplicate execution', async () => {
   let generation = 'g1'; let calls = 0;
   const reader = { changes: async () => ({ changes: [change('vite.config.ts')] }), generation: async () => generation } as unknown as RepositoryReader;
-  const fetcher = { fetch: async (id: string) => { calls++; return { id, title: 'Vite config reference', url: 'https://vite.dev/config/', fetchedAt: new Date(0).toISOString(), excerpt: 'guide', byteCount: 5 }; } } as OfficialDocumentFetcher;
+  const fetcher = { fetch: async (id: string) => { calls++; return { id, title: 'MODEL CONTROLLED TITLE', url: 'https://evil.test/', fetchedAt: new Date(0).toISOString(), excerpt: 'guide', byteCount: 5 }; } } as OfficialDocumentFetcher;
   const service = new OfficialDocsService(reader, fetcher); const preview = await service.preview('a'.repeat(40)); assert.equal(preview.networkAccessed, false); assert.ok(preview.requestId);
   const [first, duplicate] = await Promise.all([service.execute(preview.requestId!), service.execute(preview.requestId!)]); assert.deepEqual(first, duplicate); assert.equal(calls, 1);
+  assert.match(first.documentSetId!, /^[0-9a-f]{32}$/u); assert.equal(first.documents[0]?.citationId, 'official:vite'); assert.equal(first.documents[0]?.title, 'Vite config reference'); assert.equal(first.documents[0]?.url, 'https://vite.dev/config/');
+  const context = await service.forAi('a'.repeat(40), first.documentSetId!); assert.deepEqual(context.documents, [{ citationId: 'official:vite', excerpt: 'guide' }]); assert.equal(context.citationTargets[0]?.url, 'https://vite.dev/config/');
+  await assert.rejects(service.forAi('b'.repeat(40), first.documentSetId!), /different commit/u);
   const stale = await service.preview('a'.repeat(40)); generation = 'g2'; await assert.rejects(service.execute(stale.requestId!), /state changed/u);
+  await assert.rejects(service.forAi('a'.repeat(40), first.documentSetId!), /state changed/u);
 });
 
 test('docs service serializes outbound fetches across request IDs', async () => {
@@ -100,4 +104,11 @@ test('docs service rejects repository changes during a fetch', async () => {
   const fetcher = { fetch: async (id: string) => { generation = 'g2'; return { id, title: id, url: 'https://vite.dev/config/', fetchedAt: new Date(0).toISOString(), excerpt: 'guide', byteCount: 5 }; } } as OfficialDocumentFetcher;
   const service = new OfficialDocsService(reader, fetcher); const preview = await service.preview('a'.repeat(40));
   await assert.rejects(service.execute(preview.requestId!), /state changed during/u);
+});
+
+test('official document sets expire independently of completed fetch results', async () => {
+  let now = 0; const reader = { changes: async () => ({ changes: [change('vite.config.ts')] }), generation: async () => 'g1' } as unknown as RepositoryReader;
+  const fetcher = { fetch: async (id: string) => ({ id, title: 'untrusted', url: 'https://evil.test/', fetchedAt: new Date(0).toISOString(), excerpt: 'guide', byteCount: 5 }) } as OfficialDocumentFetcher;
+  const service = new OfficialDocsService(reader, fetcher, { now: () => now, ttlMs: 10 }); const preview = await service.preview('a'.repeat(40)); const fetched = await service.execute(preview.requestId!);
+  assert.ok(fetched.documentSetId); now = 11; await assert.rejects(service.forAi('a'.repeat(40), fetched.documentSetId!), /expired or no longer exists/u);
 });

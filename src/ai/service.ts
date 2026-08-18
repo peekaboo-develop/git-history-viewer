@@ -6,6 +6,8 @@ import type { AiProvider, AiProviderDescriptor } from './provider.js';
 import { ViewerError } from '../core/errors.js';
 import type { RepositoryReader } from '../core/repository.js';
 import type { AiExplanation } from '../schema/types.js';
+import { GroundedAiExplanationService } from './grounding.js';
+import { AiExecutionQueue } from './queue.js';
 
 const REQUEST_TTL_MS = 5 * 60 * 1_000;
 const MAX_PREVIEWS = 100;
@@ -21,15 +23,19 @@ export interface AiPreview {
 }
 
 export class AiExplanationService {
-  private readonly requests = new Map<string, PendingRequest>(); private active = 0; private waiting = 0;
-  constructor(private readonly reader: RepositoryReader, readonly provider: AiProvider, private readonly cache = new FileAiCache(), private readonly cacheEnabled = true) {}
+  private readonly requests = new Map<string, PendingRequest>();
+  constructor(private readonly reader: RepositoryReader, readonly provider: AiProvider, private readonly cache = new FileAiCache(), private readonly cacheEnabled = true, private queue = new AiExecutionQueue(), private readonly now: () => number = Date.now, private readonly requestTtlMs = REQUEST_TTL_MS) {}
+
+  shareQueue(queue: AiExecutionQueue): void { this.queue = queue; }
+
+  createGroundedService(): GroundedAiExplanationService { return new GroundedAiExplanationService(this.reader, this.provider, this.cache, this.cacheEnabled, this.queue); }
 
   capabilities(): { enabled: true; profiles: AiProviderDescriptor[]; defaultProfileId: string; policy: string } {
     return { enabled: true, profiles: [this.provider.descriptor], defaultProfileId: this.provider.descriptor.profileId, policy: `metadata-only; cache-${this.cacheEnabled ? 'enabled' : 'disabled'}` };
   }
 
   private cleanup(): void {
-    const now = Date.now(); for (const [id, item] of this.requests) if (item.expiresAt < now && item.promise === null) this.requests.delete(id);
+    const now = this.now(); for (const [id, item] of this.requests) if (item.expiresAt <= now && item.promise === null) this.requests.delete(id);
     while (this.requests.size >= MAX_PREVIEWS) this.requests.delete(this.requests.keys().next().value as string);
   }
 
@@ -40,7 +46,7 @@ export class AiExplanationService {
     const canonicalRequest = JSON.stringify(this.provider.canonicalRequest(evidence.evidence, cacheIdentity));
     const descriptor = this.provider.descriptor;
     const cacheRequest: AiCacheRequest = { operation: 'explain', targetLanguage: 'ja', promptVersion: AI_PROMPT_VERSION, provider: descriptor.providerId, model: descriptor.model, exactInputDigest: digestAiInput(canonicalRequest) };
-    const requestId = randomBytes(16).toString('hex'); const expiresAt = Date.now() + REQUEST_TTL_MS;
+    const requestId = randomBytes(16).toString('hex'); const expiresAt = this.now() + this.requestTtlMs;
     this.requests.set(requestId, { oid, generation, evidence, cacheIdentity, cacheRequest, expiresAt, promise: null });
     const cacheHit = this.cacheEnabled && (await this.cache.get<AiExplanation>(aiCacheKey(cacheRequest))) !== null;
     return { requestId, expiresAt: new Date(expiresAt).toISOString(), source: { oid, parentIndex: evidence.parentIndex, generation }, provider: descriptor, evidence: evidence.evidence, includedChanges: evidence.includedChanges, excludedChanges: evidence.excludedChanges, truncated: evidence.truncated, inputBytes: evidence.inputBytes, cacheHit, notice: this.provider.notice() };
@@ -49,22 +55,16 @@ export class AiExplanationService {
   async execute(requestId: string): Promise<AiExecution> {
     if (!/^[0-9a-f]{32}$/u.test(requestId)) throw new ViewerError('INVALID_ARGUMENT', 'AI request ID is invalid.');
     const pending = this.requests.get(requestId);
-    if (!pending || pending.expiresAt < Date.now()) { this.requests.delete(requestId); throw new ViewerError('AI_REQUEST_EXPIRED', 'The AI preview expired or no longer exists.'); }
+    if (!pending || pending.expiresAt <= this.now()) { this.requests.delete(requestId); throw new ViewerError('AI_REQUEST_EXPIRED', 'The AI preview expired or no longer exists.'); }
     if (pending.promise) return pending.promise;
-    if (this.active >= 1 && this.waiting >= 4) throw new ViewerError('AI_QUEUE_FULL', 'The AI explanation queue is full.', { retryable: true });
-    if (this.active >= 1) this.waiting += 1;
-    const promise = (async (): Promise<AiExecution> => {
-      while (this.active >= 1) await new Promise<void>((resolve) => setTimeout(resolve, 25));
-      if (this.waiting > 0) this.waiting -= 1;
-      this.active += 1;
-      try {
+    const promise = this.queue.run(async (): Promise<AiExecution> => {
+        if (pending.expiresAt <= this.now()) throw new ViewerError('AI_REQUEST_EXPIRED', 'The AI preview expired while waiting.');
         if (await this.reader.generation() !== pending.generation) throw new ViewerError('STATE_CHANGED', 'Repository state changed after the AI preview.');
         if (!this.cacheEnabled) return { explanation: await this.provider.generate(pending.evidence.evidence), cache: { hit: false, stored: false }, warning: null };
         const result = await this.cache.getOrComputeResilient(pending.cacheRequest, () => this.provider.generate(pending.evidence.evidence));
         const paths = new Set(pending.evidence.evidence.changes.flatMap((item) => item.oldPath ? [item.path, item.oldPath] : [item.path]));
         return { explanation: validateExplanation(result.value, paths), cache: { hit: result.cacheHit, stored: result.cacheStored }, warning: result.cacheWarning };
-      } finally { this.active -= 1; }
-    })();
+    });
     pending.promise = promise;
     return promise;
   }

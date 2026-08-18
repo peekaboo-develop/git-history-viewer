@@ -1,6 +1,6 @@
 import { ViewerError } from '../core/errors.js';
-import type { AiEvidenceSummary, AiExplanation } from '../schema/types.js';
-import { AI_OUTPUT_SCHEMA, AI_PROMPT_VERSION, AI_SYSTEM_PROMPT, validateExplanation } from './explanation-schema.js';
+import type { AiEvidenceSummary, AiExplanation, GroundedAiEvidence, GroundedAiExplanation } from '../schema/types.js';
+import { AI_OUTPUT_SCHEMA, AI_PROMPT_VERSION, AI_SYSTEM_PROMPT, GROUNDED_AI_OUTPUT_SCHEMA, GROUNDED_AI_PROMPT_VERSION, GROUNDED_AI_SYSTEM_PROMPT, validateExplanation, validateGroundedExplanation } from './explanation-schema.js';
 import type { AiProvider, AiProviderDescriptor } from './provider.js';
 
 const ENDPOINT = 'https://api.openai.com/v1/responses';
@@ -40,12 +40,20 @@ export class OpenAiProvider implements AiProvider {
   canonicalRequest(evidence: AiEvidenceSummary, cacheIdentity: string): unknown {
     return { promptVersion: AI_PROMPT_VERSION, provider: 'openai', adapterVersion: this.descriptor.adapterVersion, model: this.descriptor.model, cacheIdentity, system: AI_SYSTEM_PROMPT, evidence, schema: AI_OUTPUT_SCHEMA, settings: { maxOutputTokens: this.descriptor.maxOutputTokens, store: false } };
   }
+  canonicalGroundedRequest(evidence: GroundedAiEvidence, cacheIdentity: string): unknown {
+    return { promptVersion: GROUNDED_AI_PROMPT_VERSION, provider: 'openai', adapterVersion: this.descriptor.adapterVersion, model: this.descriptor.model, cacheIdentity, system: GROUNDED_AI_SYSTEM_PROMPT, evidence, schema: GROUNDED_AI_OUTPUT_SCHEMA, settings: { maxOutputTokens: this.descriptor.maxOutputTokens, store: false } };
+  }
   request(evidence: AiEvidenceSummary): Record<string, unknown> {
     return { model: this.descriptor.model, input: [{ role: 'system', content: AI_SYSTEM_PROMPT }, { role: 'user', content: JSON.stringify(evidence) }], text: { format: { type: 'json_schema', name: 'git_commit_explanation', strict: true, schema: AI_OUTPUT_SCHEMA } }, max_output_tokens: this.descriptor.maxOutputTokens, store: false };
   }
-  async generate(evidence: AiEvidenceSummary): Promise<AiExplanation> {
-    const body = JSON.stringify(this.request(evidence));
-    if (Buffer.byteLength(body) > 32 * 1024) throw new ViewerError('OUTPUT_LIMIT', 'The AI provider request is too large.');
+  groundedRequest(evidence: GroundedAiEvidence): Record<string, unknown> {
+    return { model: this.descriptor.model, input: [{ role: 'system', content: GROUNDED_AI_SYSTEM_PROMPT }, { role: 'user', content: JSON.stringify(evidence) }], text: { format: { type: 'json_schema', name: 'grounded_git_commit_explanation', strict: true, schema: GROUNDED_AI_OUTPUT_SCHEMA } }, max_output_tokens: this.descriptor.maxOutputTokens, store: false };
+  }
+  generate(evidence: AiEvidenceSummary): Promise<AiExplanation> { return this.generateWith(evidence, false) as Promise<AiExplanation>; }
+  generateGrounded(evidence: GroundedAiEvidence): Promise<GroundedAiExplanation> { return this.generateWith(evidence, true) as Promise<GroundedAiExplanation>; }
+  private async generateWith(evidence: AiEvidenceSummary | GroundedAiEvidence, grounded: boolean): Promise<AiExplanation | GroundedAiExplanation> {
+    const body = JSON.stringify(grounded ? this.groundedRequest(evidence as GroundedAiEvidence) : this.request(evidence));
+    if (Buffer.byteLength(body) > 48 * 1024) throw new ViewerError('OUTPUT_LIMIT', 'The AI provider request is too large.');
     let response: Response;
     try { response = await this.fetchImpl(ENDPOINT, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(this.timeoutMs), headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' }, body }); }
     catch (error) {
@@ -63,6 +71,7 @@ export class OpenAiProvider implements AiProvider {
     const output = message.content.find((item) => record(item) && item.type === 'output_text');
     if (!record(output) || typeof output.text !== 'string') throw new ViewerError('PROVIDER_OUTPUT_INVALID', 'OpenAI returned no structured output.');
     let parsed: unknown; try { parsed = JSON.parse(output.text); } catch { throw new ViewerError('PROVIDER_OUTPUT_INVALID', 'OpenAI returned invalid structured output.'); }
-    return validateExplanation(parsed, new Set(evidence.changes.flatMap((item) => item.oldPath ? [item.path, item.oldPath] : [item.path])));
+    const paths = new Set(evidence.changes.flatMap((item) => item.oldPath ? [item.path, item.oldPath] : [item.path]));
+    return grounded ? validateGroundedExplanation(parsed, paths, new Set((evidence as GroundedAiEvidence).officialDocuments.map((item) => item.citationId))) : validateExplanation(parsed, paths);
   }
 }

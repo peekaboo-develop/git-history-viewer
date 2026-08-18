@@ -47,10 +47,10 @@ Loopback Ollama metadata-only MVP implemented; remaining work:
 
 - 5A implemented: detect a small fixed set of technologies from strong changed-path markers and show compiled official links without network access.
 - Keep version `unknown` until a future, separately consented manifest-reading design exists; never infer it from commit messages.
-- 5B retrieval implemented: a separate same-origin/CSRF consent action fetches at most two bounded excerpts through a pinned-IP HTTPS transport; no persistence or LLM transmission yet.
+- 5B retrieval implemented: a separate same-origin/CSRF consent action fetches at most two bounded excerpts through a pinned-IP HTTPS transport and stores a five-minute in-memory document set.
 - Resolve only through a curated official-domain registry.
 - Reject redirects and any destination with a private/reserved DNS answer; pin TLS to an approved address and recheck the connected peer.
-- Store citation metadata and allow AI to cite retrieved IDs only.
+- Grounded AI implemented as a separate preview/execute API: excerpts and server-owned citation IDs are sent only after a second confirmation; model citations are validated and mapped back to compiled-registry links.
 - Do not crawl automatically or accept arbitrary URLs.
 
 ## Rollback
