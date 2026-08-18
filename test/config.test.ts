@@ -26,6 +26,10 @@ test('AI config accepts strict provider profiles and rejects unsafe drift', () =
   const anthropic = validateAiConfig({ schemaVersion: '1', defaultProfileId: 'claude', profiles: [{ id: 'claude', label: 'Claude', provider: 'anthropic', model: 'claude-sonnet-4-6', maxOutputTokens: 1536 }] });
   assert.equal(anthropic.profiles[0]?.provider, 'anthropic');
   assert.throws(() => validateAiConfig({ schemaVersion: '1', defaultProfileId: 'claude', profiles: [{ ...anthropic.profiles[0], credentialEnv: 'AWS_SECRET_ACCESS_KEY' }] }), /invalid profile/u);
+  const google = validateAiConfig({ schemaVersion: '1', defaultProfileId: 'gemini', profiles: [{ id: 'gemini', label: 'Gemini', provider: 'google', model: 'gemini-2.5-flash', maxOutputTokens: 1536 }] });
+  assert.equal(google.profiles[0]?.provider, 'google');
+  assert.throws(() => validateAiConfig({ schemaVersion: '1', defaultProfileId: 'gemini', profiles: [{ ...google.profiles[0], model: 'models/gemini-2.5-flash' }] }), /invalid profile/u);
+  assert.throws(() => validateAiConfig({ schemaVersion: '1', defaultProfileId: 'gemini', profiles: [{ ...google.profiles[0], endpoint: 'https://evil.test' }] }), /invalid profile/u);
 });
 
 test('AI config loader rejects symlinks and oversized files', async () => {
@@ -38,6 +42,8 @@ test('AI config loader rejects symlinks and oversized files', async () => {
 test('provider factory routes profiles to fixed credential environments', () => {
   const openai = createConfiguredProvider({ id: 'openai', label: 'OpenAI', provider: 'openai', model: 'gpt-5.4-mini', maxOutputTokens: 1536 }, { OPENAI_API_KEY: 'openai-secret' });
   const anthropic = createConfiguredProvider({ id: 'claude', label: 'Claude', provider: 'anthropic', model: 'claude-sonnet-4-6', maxOutputTokens: 1536 }, { ANTHROPIC_API_KEY: 'anthropic-secret' });
-  assert.equal(openai.descriptor.providerId, 'openai'); assert.equal(anthropic.descriptor.providerId, 'anthropic');
+  const google = createConfiguredProvider({ id: 'gemini', label: 'Gemini', provider: 'google', model: 'gemini-2.5-flash', maxOutputTokens: 1536 }, { GEMINI_API_KEY: 'google-secret' });
+  assert.equal(openai.descriptor.providerId, 'openai'); assert.equal(anthropic.descriptor.providerId, 'anthropic'); assert.equal(google.descriptor.providerId, 'google');
   assert.throws(() => createConfiguredProvider({ id: 'claude', label: 'Claude', provider: 'anthropic', model: 'claude-sonnet-4-6', maxOutputTokens: 1536 }, { OPENAI_API_KEY: 'wrong-provider-secret' }), /ANTHROPIC_API_KEY/u);
+  assert.throws(() => createConfiguredProvider({ id: 'gemini', label: 'Gemini', provider: 'google', model: 'gemini-2.5-flash', maxOutputTokens: 1536 }, { GOOGLE_API_KEY: 'wrong-provider-secret' }), /GEMINI_API_KEY/u);
 });

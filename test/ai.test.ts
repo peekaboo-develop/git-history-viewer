@@ -6,6 +6,7 @@ import test from 'node:test';
 import { AnthropicProvider } from '../src/ai/anthropic.js';
 import { FileAiCache } from '../src/ai/cache.js';
 import { buildAiEvidence } from '../src/ai/evidence.js';
+import { GoogleProvider, toGeminiJsonSchema } from '../src/ai/google.js';
 import { OllamaProvider } from '../src/ai/ollama.js';
 import { OpenAiProvider } from '../src/ai/openai.js';
 import { AiServiceRegistry } from '../src/ai/registry.js';
@@ -129,4 +130,46 @@ test('Anthropic provider classifies HTTP failures without exposing response bodi
   const base = { profileId: 'claude-test', label: 'Claude test', model: 'claude-sonnet-4-6', apiKey: 'sk-ant-test-secret' }; const evidence = { subject: 'test', body: '', comparison: 'root' as const, changes: [] };
   const expected: Array<[number, string, boolean]> = [[400, 'PROVIDER_UNAVAILABLE', false], [401, 'PROVIDER_UNAVAILABLE', false], [404, 'PROVIDER_MODEL_NOT_FOUND', false], [408, 'PROVIDER_TIMEOUT', true], [413, 'OUTPUT_LIMIT', false], [429, 'PROVIDER_UNAVAILABLE', true], [529, 'PROVIDER_UNAVAILABLE', true]];
   for (const [status, code, retryable] of expected) await assert.rejects(new AnthropicProvider({ ...base, fetchImpl: (async () => new Response('secret provider body', { status })) as typeof fetch }).generate(evidence), (error: unknown) => error instanceof ViewerError && error.code === code && error.retryable === retryable && !error.message.includes('secret provider body'));
+});
+
+test('Google provider uses fixed GenerateContent contract and performs no preview network call', async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+    calls.push({ url: String(input), ...(init ? { init } : {}) });
+    return new Response(JSON.stringify({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(explanation) }] } }] }));
+  }) as typeof fetch;
+  const provider = new GoogleProvider({ profileId: 'gemini-test', label: 'Gemini test', model: 'gemini-2.5-flash', apiKey: 'google-test-secret', fetchImpl });
+  assert.equal(await provider.cacheIdentity(), 'gemini-generate-content-v1beta-response-json-schema-v1:gemini-2.5-flash'); assert.equal(calls.length, 0);
+  const evidence = { subject: 'test', body: '', comparison: 'first-parent' as const, changes: [{ state: 'A', path: 'unsafe.txt', oldPath: null, added: 1, deleted: 0 }] };
+  const result = await provider.generate(evidence); assert.equal(result.summaryJa, '変更の要約');
+  assert.equal(calls[0]?.url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent');
+  const headers = calls[0]?.init?.headers as Record<string, string>; assert.equal(headers['x-goog-api-key'], 'google-test-secret');
+  const request = JSON.parse(String(calls[0]?.init?.body)) as Record<string, unknown>; assert.equal(request.store, false); assert.equal(Object.hasOwn(request, 'tools'), false); assert.doesNotMatch(JSON.stringify(request), /google-test-secret/u);
+  assert.deepEqual((provider.canonicalRequest(evidence, 'identity') as { request: unknown }).request, request);
+});
+
+test('Google schema conversion is non-mutating and rejects unsupported keywords', () => {
+  const source = { type: 'object', properties: { version: { const: '1' }, level: { enum: ['low', 'high'] } }, required: ['version', 'level'] };
+  const before = JSON.stringify(source); const converted = toGeminiJsonSchema(source);
+  assert.equal(JSON.stringify(source), before);
+  assert.deepEqual((converted.properties as Record<string, unknown>).version, { type: 'string', enum: ['1'] });
+  assert.deepEqual((converted.properties as Record<string, unknown>).level, { enum: ['low', 'high'], type: 'string' });
+  assert.deepEqual(converted.propertyOrdering, ['version', 'level']); assert.equal(converted.additionalProperties, false);
+  assert.throws(() => toGeminiJsonSchema({ type: 'string', pattern: '.*' }), /unsupported Gemini keyword/u);
+});
+
+test('Google provider rejects hostile model paths, blocked prompts, and incomplete candidates', async () => {
+  const base = { profileId: 'gemini-test', label: 'Gemini test', model: 'gemini-2.5-flash', apiKey: 'google-test-secret' };
+  for (const model of ['models/gemini-2.5-flash', '../secret', 'gemini:latest', 'gemini?key=secret', 'gemini%2Fother']) assert.throws(() => new GoogleProvider({ ...base, model }), /bare model ID/u);
+  const response = (value: unknown) => (async () => new Response(JSON.stringify(value))) as typeof fetch; const evidence = { subject: 'test', body: '', comparison: 'root' as const, changes: [] };
+  await assert.rejects(new GoogleProvider({ ...base, fetchImpl: response({ promptFeedback: { blockReason: 'SAFETY' }, candidates: [] }) }).generate(evidence), /blocked/u);
+  await assert.rejects(new GoogleProvider({ ...base, fetchImpl: response({ candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [] } }] }) }).generate(evidence), (error: unknown) => error instanceof ViewerError && error.code === 'PROVIDER_OUTPUT_LIMIT');
+  for (const reason of ['SAFETY', 'RECITATION', 'OTHER', 'MALFORMED_FUNCTION_CALL']) await assert.rejects(new GoogleProvider({ ...base, fetchImpl: response({ candidates: [{ finishReason: reason, content: { parts: [] } }] }) }).generate(evidence), (error: unknown) => error instanceof ViewerError && error.code === 'PROVIDER_OUTPUT_INVALID');
+  await assert.rejects(new GoogleProvider({ ...base, fetchImpl: response({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '{}' }, { text: '{}' }] } }] }) }).generate(evidence), /unexpected content/u);
+});
+
+test('Google provider classifies HTTP failures without exposing response bodies', async () => {
+  const base = { profileId: 'gemini-test', label: 'Gemini test', model: 'gemini-2.5-flash', apiKey: 'google-test-secret' }; const evidence = { subject: 'test', body: '', comparison: 'root' as const, changes: [] };
+  const expected: Array<[number, string, boolean]> = [[400, 'PROVIDER_UNAVAILABLE', false], [403, 'PROVIDER_UNAVAILABLE', false], [404, 'PROVIDER_MODEL_NOT_FOUND', false], [408, 'PROVIDER_TIMEOUT', true], [413, 'OUTPUT_LIMIT', false], [429, 'PROVIDER_UNAVAILABLE', true], [503, 'PROVIDER_UNAVAILABLE', true]];
+  for (const [status, code, retryable] of expected) await assert.rejects(new GoogleProvider({ ...base, fetchImpl: (async () => new Response('secret provider body', { status })) as typeof fetch }).generate(evidence), (error: unknown) => error instanceof ViewerError && error.code === code && error.retryable === retryable && !error.message.includes('secret provider body'));
 });

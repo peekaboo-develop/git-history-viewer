@@ -31,7 +31,15 @@ export interface AnthropicProfileConfig {
   maxOutputTokens: number;
 }
 
-export type AiProfileConfig = OllamaProfileConfig | OpenAiProfileConfig | AnthropicProfileConfig;
+export interface GoogleProfileConfig {
+  id: string;
+  label: string;
+  provider: 'google';
+  model: string;
+  maxOutputTokens: number;
+}
+
+export type AiProfileConfig = OllamaProfileConfig | OpenAiProfileConfig | AnthropicProfileConfig | GoogleProfileConfig;
 
 export interface AiConfig {
   schemaVersion: '1';
@@ -64,6 +72,7 @@ export function validateAiConfig(value: unknown): AiConfig {
     if (item.provider === 'ollama' && exactKeys(item, ['id', 'label', 'provider', 'model', 'ollamaPort', 'maxOutputTokens']) && !/(?:^|[:_-])cloud(?:$|[:_-])/iu.test(item.model) && Number.isInteger(item.ollamaPort) && Number(item.ollamaPort) >= 1 && Number(item.ollamaPort) <= 65_535) profiles.push({ id: item.id, label: item.label, provider: 'ollama', model: item.model, ollamaPort: Number(item.ollamaPort), maxOutputTokens: Number(item.maxOutputTokens) });
     else if (item.provider === 'openai' && exactKeys(item, ['id', 'label', 'provider', 'model', 'maxOutputTokens'])) profiles.push({ id: item.id, label: item.label, provider: 'openai', model: item.model, maxOutputTokens: Number(item.maxOutputTokens) });
     else if (item.provider === 'anthropic' && exactKeys(item, ['id', 'label', 'provider', 'model', 'maxOutputTokens'])) profiles.push({ id: item.id, label: item.label, provider: 'anthropic', model: item.model, maxOutputTokens: Number(item.maxOutputTokens) });
+    else if (item.provider === 'google' && exactKeys(item, ['id', 'label', 'provider', 'model', 'maxOutputTokens']) && /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/u.test(item.model)) profiles.push({ id: item.id, label: item.label, provider: 'google', model: item.model, maxOutputTokens: Number(item.maxOutputTokens) });
     else throw new ViewerError('INVALID_ARGUMENT', 'AI config contains an invalid profile.');
   }
   if (!ids.has(value.defaultProfileId)) throw new ViewerError('INVALID_ARGUMENT', 'The default AI profile does not exist.');

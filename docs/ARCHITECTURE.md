@@ -55,7 +55,7 @@ This cache does not make MCP into an LLM provider. MCP continues to expose bound
 
 ## AI provider profiles
 
-The Web adapter uses a provider-neutral contract for descriptor metadata, cache identity, canonical requests, notices, and structured generation. Version 0.1 implements Ollama, OpenAI Responses, and Anthropic Messages adapters. Other remote providers are added one official API at a time after their request/response dialect and credential boundary are tested.
+The Web adapter uses a provider-neutral contract for descriptor metadata, cache identity, canonical requests, notices, and structured generation. Version 0.1 implements Ollama, OpenAI Responses, Anthropic Messages, and Google Gemini GenerateContent adapters. Each adapter fixes its official endpoint, credential variable, structured-output dialect, response validation, and cache-version identity. Google's JSON Schema subset is produced by a non-mutating adapter conversion; unsupported keywords fail closed instead of being silently dropped.
 
 Profiles are loaded once at startup from a strict, size-bounded, non-symlink JSON file. The file accepts no credentials, arbitrary endpoints, prompts, or environment-variable names. A configured profile is not active until explicitly selected with repeatable `--ai-profile`. Preview chooses a profile through a GET query, and the server binds the returned request ID to that service. POST still accepts only the request ID, so the browser cannot swap provider, model, endpoint, evidence, or prompt after approval.
 
