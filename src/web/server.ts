@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { asViewerError, ViewerError } from '../core/errors.js';
 import type { RepositoryReader } from '../core/repository.js';
 import type { AiRuntime } from '../ai/registry.js';
+import { recommendOfficialDocs } from '../docs/official.js';
 import { commitPrompt, MCP_CLIENT_GUIDES, MCP_RESOURCES } from '../mcp/guides.js';
 import { SCHEMA_VERSION, success } from '../schema/types.js';
 
@@ -133,6 +134,12 @@ export async function createViewerServer(reader: RepositoryReader, options: View
       if (url.pathname === '/api/v1/generation') return json({ generation: gen });
       const changes = url.pathname.match(/^\/api\/v1\/commits\/([0-9a-f]+)\/changes$/u);
       if (changes) return json(await reader.changes(changes[1] ?? '', url.searchParams.has('parentIndex') ? Number(url.searchParams.get('parentIndex')) : null, true));
+      const officialDocs = url.pathname.match(/^\/api\/v1\/commits\/([0-9a-f]+)\/official-docs$/u);
+      if (officialDocs) {
+        if (url.search) throw new ViewerError('INVALID_ARGUMENT', 'Official document recommendations do not accept query parameters.');
+        const result = await reader.changes(officialDocs[1] ?? '', null, true);
+        return json({ items: recommendOfficialDocs(result.changes), networkAccessed: false, versionDetection: 'unavailable' });
+      }
       const preview = url.pathname.match(/^\/api\/v1\/commits\/([0-9a-f]+)\/explanation-preview$/u);
       if (preview) {
         if ([...url.searchParams.keys()].some((key) => key !== 'profile') || url.searchParams.getAll('profile').length > 1) throw new ViewerError('INVALID_ARGUMENT', 'AI preview accepts only one profile parameter.');

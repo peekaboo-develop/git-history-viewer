@@ -29,6 +29,9 @@ test('web server binds loopback and enforces session, host, origin, and method',
   assert.equal(guides.status, 200); assert.match(guides.body, /codex mcp add/u); assert.match(guides.body, /FULL_COMMIT_OID/u);
   assert.doesNotMatch(guides.body, new RegExp(data.repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'u'));
   assert.equal((await request(port, '/api/v1/mcp/guides?repo=/tmp/evil', { headers: { Cookie: session } })).status, 400);
+  const officialDocs = await request(port, `/api/v1/commits/${data.unsafe}/official-docs`, { headers: { Cookie: session } });
+  assert.equal(officialDocs.status, 200); assert.equal(JSON.parse(officialDocs.body).data.networkAccessed, false);
+  assert.equal((await request(port, `/api/v1/commits/${data.unsafe}/official-docs?url=https://evil.test`, { headers: { Cookie: session } })).status, 400);
 });
 
 test('AI POST requires exact origin, CSRF, content type, and bounded requestId body', async (t) => {

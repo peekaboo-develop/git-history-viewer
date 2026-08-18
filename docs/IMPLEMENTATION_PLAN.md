@@ -45,7 +45,9 @@ Loopback Ollama metadata-only MVP implemented; remaining work:
 
 ## Phase 5: official documents
 
-- Detect technology and version from changed paths and manifests.
+- 5A implemented: detect a small fixed set of technologies from strong changed-path markers and show compiled official links without network access.
+- Keep version `unknown` until a future, separately consented manifest-reading design exists; never infer it from commit messages.
+- Future 5B may fetch bounded excerpts only after separate network consent and a pinned-IP HTTPS transport.
 - Resolve only through a curated official-domain registry.
 - Revalidate redirects and reject private/local addresses.
 - Store citation metadata and allow AI to cite retrieved IDs only.

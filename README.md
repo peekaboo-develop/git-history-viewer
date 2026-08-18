@@ -69,4 +69,6 @@ Config changes require a restart. `--ai-profile` is repeatable and is the explic
 
 The AI-result cache uses bounded, sharded JSON files in the operating system's user cache directory. Cache metadata stores no API keys, raw prompts, diffs, repository paths, or remote URLs; generated results may still repeat sensitive source text. `--no-ai-cache` bypasses reads and writes. `cache clear` removes only recognized cache-entry files.
 
+The commit detail pane can recommend up to two version-neutral links from a compiled registry of official documentation for strong path markers such as GitHub Actions workflows, Docker/Compose files, TSConfig, Vite config, and Vue SFCs. This step performs no documentation fetch, search, crawl, or AI transmission. Version detection and AI citations require a future, separately consented flow.
+
 See `docs/PRODUCT_SPEC.md`, `docs/ARCHITECTURE.md`, `docs/MCP.md`, and `docs/SECURITY.md` for the normative design.
