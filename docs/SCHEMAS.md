@@ -212,6 +212,8 @@ Before 1.0, compatible additions may add optional fields. Removing fields, chang
 | AI capabilities | provider policy plus browser-session CSRF token |
 | AI explanation preview | short-lived request ID, exact evidence preview, provider and byte-count metadata |
 | AI explanation | validated `AiExplanation`, cache status, and optional cache-write warning |
+| official docs preview | version-neutral registry items, short-lived request ID, and fixed retrieval limits; no network access |
+| official docs fetch | bounded server-owned excerpts and per-item safe failure codes |
 | cache status | `{ entries: number; bytes: number; oldestModifiedAt: IsoDate \| null; newestModifiedAt: IsoDate \| null }` |
 | cache clear | `{ removedEntries: number; removedBytes: number }` |
 

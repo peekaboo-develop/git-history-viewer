@@ -19,7 +19,7 @@ Optional AI adapters
 ├── OpenAI Responses API (implemented)
 ├── Anthropic Messages API (implemented)
 ├── other official remote adapters, one provider at a time (future)
-└── official-document resolver (future)
+└── official-document resolver (fixed registry + consented pinned HTTPS retrieval)
 ```
 
 The core owns all Git subprocesses, parsing, output limits, repository state generation, and shared data schemas. It has no browser, HTTP-client, MCP, or LLM dependency.

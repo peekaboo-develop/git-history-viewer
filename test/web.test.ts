@@ -42,7 +42,8 @@ test('AI POST requires exact origin, CSRF, content type, and bounded requestId b
     preview: async (_oid: string, profile: string | null | undefined) => { previewProfiles.push(profile); return { requestId: 'b'.repeat(32) }; },
     execute: async () => ({ explanation: { schemaVersion: '1' as const, summaryJa: 'ok', changes: [], terms: [], risks: [], testObservations: [], limitations: [] }, cache: { hit: false, stored: true }, warning: null }),
   };
-  const viewer = await createViewerServer(reader, { port: 0, limit: 50, token: 'a'.repeat(64), ai: fakeAi as never }); await viewer.listen();
+  const docsRequests: string[] = []; const fakeDocs = { preview: async () => ({ requestId: 'c'.repeat(32), items: [], networkAccessed: false as const, versionDetection: 'unavailable' as const, limits: { pages: 2 as const, rawBytesPerPage: 1048576, excerptBytesPerPage: 4096 } }), execute: async (requestId: string) => { docsRequests.push(requestId); return { documents: [], failures: [] }; } };
+  const viewer = await createViewerServer(reader, { port: 0, limit: 50, token: 'a'.repeat(64), ai: fakeAi as never, docs: fakeDocs }); await viewer.listen();
   t.after(() => viewer.close()); const port = viewer.port ?? 0;
   const login = await request(port, `/?token=${'a'.repeat(64)}`); const session = (login.headers['set-cookie']?.[0] ?? '').split(';')[0] ?? '';
   const capabilities = await request(port, '/api/v1/ai/capabilities', { headers: { Cookie: session } }); const csrf = JSON.parse(capabilities.body).data.csrfToken as string;
@@ -56,4 +57,6 @@ test('AI POST requires exact origin, CSRF, content type, and bounded requestId b
   assert.equal((await request(port, '/api/v1/ai/explanations', { method: 'POST', headers: { ...base, 'Transfer-Encoding': 'chunked' }, body: 'x'.repeat(1025) })).status, 413);
   assert.equal((await request(port, '/api/v1/ai/explanations', { method: 'POST', headers: base, body: JSON.stringify({ requestId: 'b'.repeat(32), model: 'evil' }) })).status, 400);
   assert.equal((await request(port, '/api/v1/ai/explanations', { method: 'POST', headers: base, body: JSON.stringify({ requestId: 'b'.repeat(32) }) })).status, 200);
+  assert.equal((await request(port, '/api/v1/docs/fetch', { method: 'POST', headers: base, body: JSON.stringify({ requestId: 'c'.repeat(32) }) })).status, 200); assert.deepEqual(docsRequests, ['c'.repeat(32)]);
+  assert.equal((await request(port, '/api/v1/docs/fetch', { method: 'POST', headers: { ...base, 'X-GHV-CSRF': 'wrong' }, body: JSON.stringify({ requestId: 'c'.repeat(32) }) })).status, 403);
 });

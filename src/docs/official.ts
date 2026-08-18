@@ -25,3 +25,10 @@ export function recommendOfficialDocs(changes: Change[], limit = 2): OfficialDoc
   const paths = changes.filter((change) => change.state !== 'D' && change.path?.encoding === 'utf8').map((change) => change.path!.display);
   return REGISTRY.filter((entry) => paths.some((path) => entry.matches(path))).slice(0, limit).map(({ matches: _matches, ...entry }) => entry);
 }
+
+export function officialDocById(id: string): OfficialDocRecommendation | null {
+  const found = REGISTRY.find((entry) => entry.id === id);
+  if (!found) return null;
+  const { matches: _matches, ...entry } = found;
+  return entry;
+}

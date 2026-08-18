@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
+    "parse5": "8.0.1",
     "zod": "4.1.5"
   },
   "devDependencies": {

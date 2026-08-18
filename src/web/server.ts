@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { asViewerError, ViewerError } from '../core/errors.js';
 import type { RepositoryReader } from '../core/repository.js';
 import type { AiRuntime } from '../ai/registry.js';
-import { recommendOfficialDocs } from '../docs/official.js';
+import { OfficialDocsService, type OfficialDocsPreview, type OfficialDocsResult } from '../docs/service.js';
 import { commitPrompt, MCP_CLIENT_GUIDES, MCP_RESOURCES } from '../mcp/guides.js';
 import { SCHEMA_VERSION, success } from '../schema/types.js';
 
@@ -68,11 +68,13 @@ async function jsonBody(request: IncomingMessage, maximumBytes: number): Promise
   return parsed as Record<string, unknown>;
 }
 
-export interface ViewerServerOptions { port: number; limit: number; token?: string; ai?: AiRuntime }
+export interface OfficialDocsRuntime { preview(oid: string): Promise<OfficialDocsPreview>; execute(requestId: string): Promise<OfficialDocsResult> }
+export interface ViewerServerOptions { port: number; limit: number; token?: string; ai?: AiRuntime; docs?: OfficialDocsRuntime }
 
 export async function createViewerServer(reader: RepositoryReader, options: ViewerServerOptions) {
   const token = options.token ?? randomBytes(32).toString('hex');
   const csrfToken = randomBytes(32).toString('hex');
+  const docs = options.docs ?? new OfficialDocsService(reader);
   const cookieName = 'git_history_session';
   let actualPort: number | null = null;
   let versionPromise: Promise<string> | null = null;
@@ -103,13 +105,17 @@ export async function createViewerServer(reader: RepositoryReader, options: View
       }
       if (!equalSecret(cookie(request, cookieName), token)) return send(response, 401, 'Session required.');
       if (request.method === 'POST') {
-        if (url.pathname !== '/api/v1/ai/explanations' || url.search) return send(response, 405, 'Method not allowed.', undefined, { Allow: 'GET, HEAD' });
+        if (!['/api/v1/ai/explanations', '/api/v1/docs/fetch'].includes(url.pathname) || url.search) return send(response, 405, 'Method not allowed.', undefined, { Allow: 'GET, HEAD' });
         if (origin !== `http://${host}`) return send(response, 403, 'Origin required.');
         if (!equalSecret(typeof request.headers['x-ghv-csrf'] === 'string' ? request.headers['x-ghv-csrf'] : null, csrfToken)) return send(response, 403, 'CSRF token rejected.');
         if (request.headers['content-type'] !== 'application/json') return send(response, 415, 'Content-Type must be application/json.');
-        if (!options.ai) throw new ViewerError('AI_DISABLED', 'AI explanation is disabled.');
         const body = await jsonBody(request, 1024);
         if (Object.keys(body).length !== 1 || typeof body.requestId !== 'string') throw new ViewerError('INVALID_ARGUMENT', 'Only requestId is accepted.');
+        if (url.pathname === '/api/v1/docs/fetch') {
+          const data = await docs.execute(body.requestId);
+          return send(response, 200, JSON.stringify(success(await generation(), data)), 'application/json; charset=utf-8');
+        }
+        if (!options.ai) throw new ViewerError('AI_DISABLED', 'AI explanation is disabled.');
         const data = await options.ai.execute(body.requestId);
         const warnings = data.warning ? [{ code: 'CACHE_WRITE_FAILED', message: data.warning, details: {} }] : [];
         return send(response, 200, JSON.stringify(success(await generation(), data, warnings)), 'application/json; charset=utf-8');
@@ -137,8 +143,7 @@ export async function createViewerServer(reader: RepositoryReader, options: View
       const officialDocs = url.pathname.match(/^\/api\/v1\/commits\/([0-9a-f]+)\/official-docs$/u);
       if (officialDocs) {
         if (url.search) throw new ViewerError('INVALID_ARGUMENT', 'Official document recommendations do not accept query parameters.');
-        const result = await reader.changes(officialDocs[1] ?? '', null, true);
-        return json({ items: recommendOfficialDocs(result.changes), networkAccessed: false, versionDetection: 'unavailable' });
+        return json(await docs.preview(officialDocs[1] ?? ''));
       }
       const preview = url.pathname.match(/^\/api\/v1\/commits\/([0-9a-f]+)\/explanation-preview$/u);
       if (preview) {

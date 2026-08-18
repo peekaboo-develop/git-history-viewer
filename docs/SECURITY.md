@@ -5,7 +5,7 @@
 1. The repository and every string stored in Git are untrusted input.
 2. The local browser is authenticated but repository content remains untrusted.
 3. The MCP host controls model invocation; the MCP server controls only bounded Git reads.
-4. Every enabled AI profile is a separate recipient. Loopback Ollama can itself use cloud models; OpenAI, Anthropic, and Google send the previewed metadata to their official APIs. Official-document sites require separate future consent.
+4. Every enabled AI profile is a separate recipient. Loopback Ollama can itself use cloud models; OpenAI, Anthropic, and Google send the previewed metadata to their official APIs. Official-document retrieval requires a separate explicit consent action and reveals the inferred technology to the selected official site even though repository identifiers and content are omitted.
 
 ## Threats and controls
 
@@ -26,7 +26,7 @@
 | cached model output leaks repository context | cache metadata omits raw input/path/URL/key, private cache permissions, bounded entries, explicit clear | generated output itself may repeat confidential text |
 | cache path or symlink redirection | fixed OS cache root, content-addressed filenames, reject symlinked cache root/shards, no request-supplied paths | malware running as the same user |
 | cache corruption or concurrent writes | same-directory temporary file and rename, schema validation, per-key in-process coalescing | cross-process last-writer wins |
-| SSRF in future docs resolver | HTTPS official-domain registry, DNS/IP checks, redirect revalidation, no arbitrary URL | compromised official site |
+| SSRF in official docs resolver | compiled exact HTTPS URLs, reject any private/reserved DNS answer, pin TLS connection to an approved IP, verify remote address, reject redirects and arbitrary URLs | compromised official site or public DNS |
 | supply-chain compromise | minimal dependencies, exact lockfile, CI audit, OIDC/provenance releases | signed provenance is not a code audit |
 
 ## Read-only enforcement
@@ -54,6 +54,10 @@ Full patch mode does not apply the default exclusions or value replacement. Both
 Before any provider request, show provider, endpoint origin, model, commit OID, parent comparison, included/excluded files, and exact byte count. Require an explicit user action for every analysis. Do not send in the background or persist keys in localStorage. Cache only the validated structured result after explicit generation; never cache the raw prompt, raw diff, credentials, absolute paths, or remote URLs. `--no-ai-cache` bypasses both cache reads and writes.
 
 Ollama accepts only a numeric loopback URL configured at process startup. The application does not pull, create, or delete models. OpenAI, Anthropic, and Google accept no configurable base URL and read only their fixed credential environment. Google additionally accepts only a bare model ID so a profile cannot alter the request path. Arbitrary compatible base URLs are not implemented.
+
+## Official document consent
+
+Path detection and link display perform no network access. A separate same-origin, CSRF-protected POST with a short-lived server-owned request ID is required before retrieval. The pinned HTTPS transport ignores proxy environment variables, sends no cookies, authorization, or referrer, rejects redirects and compression, and caps DNS answers, connection time, total time, raw bytes, pages, and extracted text. HTML is parsed locally; active and navigational elements are excluded. Retrieved excerpts are untrusted data and are not yet part of the LLM request.
 
 ## Release security gates
 
