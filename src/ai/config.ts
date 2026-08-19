@@ -53,13 +53,13 @@ function profileId(value: unknown): value is string { return typeof value === 's
 function cleanLabel(value: unknown, maximum: number): value is string { return typeof value === 'string' && value.length > 0 && value.length <= maximum && !/[\u0000-\u001f\u007f]/u.test(value); }
 
 export function defaultAiConfigPath(platform = process.platform, environment: NodeJS.ProcessEnv = process.env, home = os.homedir()): string {
-  if (platform === 'darwin') return path.join(home, 'Library', 'Application Support', 'git-history-viewer', 'config.json');
+  if (platform === 'darwin') return path.posix.join(home, 'Library', 'Application Support', 'git-history-viewer', 'config.json');
   if (platform === 'win32') {
     const appData = environment.APPDATA;
     if (!appData) throw new ViewerError('INVALID_ARGUMENT', 'APPDATA is required to locate the AI config.');
-    return path.join(appData, 'git-history-viewer', 'config.json');
+    return path.win32.join(appData, 'git-history-viewer', 'config.json');
   }
-  return path.join(environment.XDG_CONFIG_HOME || path.join(home, '.config'), 'git-history-viewer', 'config.json');
+  return path.posix.join(environment.XDG_CONFIG_HOME || path.posix.join(home, '.config'), 'git-history-viewer', 'config.json');
 }
 
 export function validateAiConfig(value: unknown): AiConfig {

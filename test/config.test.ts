@@ -12,7 +12,7 @@ test('AI config paths follow platform conventions', () => {
   assert.equal(defaultAiConfigPath('darwin', {}, '/Users/test'), '/Users/test/Library/Application Support/git-history-viewer/config.json');
   assert.equal(defaultAiConfigPath('linux', { XDG_CONFIG_HOME: '/cfg' }, '/home/test'), '/cfg/git-history-viewer/config.json');
   assert.equal(defaultAiConfigPath('linux', {}, '/home/test'), '/home/test/.config/git-history-viewer/config.json');
-  assert.equal(defaultAiConfigPath('win32', { APPDATA: 'C:\\Data' }, 'C:\\Users\\test'), path.join('C:\\Data', 'git-history-viewer', 'config.json'));
+  assert.equal(defaultAiConfigPath('win32', { APPDATA: 'C:\\Data' }, 'C:\\Users\\test'), path.win32.join('C:\\Data', 'git-history-viewer', 'config.json'));
 });
 
 test('AI config accepts strict provider profiles and rejects unsafe drift', () => {

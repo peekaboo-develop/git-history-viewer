@@ -91,15 +91,15 @@ export function defaultAiCacheRoot(
   environment: Readonly<Record<string, string | undefined>> = process.env,
   userHome = homedir(),
 ): string {
-  if (currentPlatform === 'darwin') return path.join(userHome, 'Library', 'Caches', 'git-history-viewer', 'ai', 'v1');
+  if (currentPlatform === 'darwin') return path.posix.join(userHome, 'Library', 'Caches', 'git-history-viewer', 'ai', 'v1');
   if (currentPlatform === 'win32') {
     const local = environment.LOCALAPPDATA;
     const base = local && path.win32.isAbsolute(local) ? local : path.win32.join(userHome, 'AppData', 'Local');
     return path.win32.join(base, 'git-history-viewer', 'Cache', 'ai', 'v1');
   }
   const xdg = environment.XDG_CACHE_HOME;
-  const base = xdg && path.isAbsolute(xdg) ? xdg : path.join(userHome, '.cache');
-  return path.join(base, 'git-history-viewer', 'ai', 'v1');
+  const base = xdg && path.posix.isAbsolute(xdg) ? xdg : path.posix.join(userHome, '.cache');
+  return path.posix.join(base, 'git-history-viewer', 'ai', 'v1');
 }
 
 function cacheFailure(message: string, cause: unknown): ViewerError {
