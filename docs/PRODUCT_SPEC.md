@@ -31,11 +31,16 @@ The product does not mutate a repository, contact remotes, or send repository co
 - Opt-in redacted or full commit patch access for MCP.
 - MCP prompts for Japanese commit explanation and evidence-based risk review.
 - Light and dark themes. With no saved manual choice, the operating-system preference is followed.
+- Optional Web AI profiles for loopback Ollama and user-owned OpenAI, Anthropic, and Google credentials.
+- Exact payload preview and per-request consent before any model request.
+- Bounded, sharded local JSON caching for validated AI explanations.
+- Version-neutral official-document recommendations from a compiled registry.
+- Separately consented official excerpt retrieval and grounded explanations with server-owned citations.
 
 ### Later versions
 
-- Optional Web UI AI adapters for user-owned cloud keys and loopback Ollama.
-- A curated official-document resolver with verified primary domains and citations.
+- Optional per-request no-cache preference in the Web UI.
+- Separately consented manifest reading for reliable dependency-version detection.
 - Standalone binaries and native packaging after Node/npm adoption is validated.
 
 ### Non-goals

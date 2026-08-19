@@ -24,24 +24,33 @@ Gate: default privacy invariants, policy-based tool registration, conformance, p
 
 ## Phase 3: integration and release readiness
 
-1. Replace the personal Codex skill implementation with a thin installed-CLI launcher only after parity QA.
-2. Add public README, contribution, privacy, and security reporting documents.
-3. Audit `npm pack`, licenses, dependencies, and generated checksums.
-4. Prepare an alpha release without publishing it automatically.
+Completed implementation work:
+
+- Added the public README, privacy policy, security policy, and thin Codex launcher integration.
+- Added cross-platform CI for Node 22/24 and deterministic package contents.
+
+Remaining release gates:
+
+1. Run the packed-tarball CLI, Web, and MCP smoke test on every supported CI platform.
+2. Complete the dependency/license, personal-path, and generated-checksum audits.
+3. Run manual browser QA, install-from-tarball QA, and rollback rehearsal.
+4. Confirm the legal copyright holder, private vulnerability-reporting address, npm scope control, and public GitHub destination.
+5. Prepare an alpha release without publishing it automatically.
 
 Gate: manual browser QA, install-from-tarball QA, rollback test, and user approval for public GitHub/npm publication.
 
 ## Phase 4: optional embedded AI
 
-Loopback Ollama metadata-only MVP implemented; remaining work:
+Implemented:
 
 - Use the existing content-addressed `AiCache` boundary; do not couple providers to its file layout.
-- Add environment-variable BYOK only after provider-specific security review.
+- Support fixed-endpoint, environment-variable BYOK profiles for OpenAI, Anthropic, and Google after provider-specific security review.
 - Keep the implemented preflight payload preview and per-request consent contract.
 - Keep strict response schema and output caps.
-- Add a browser preference if per-request no-cache behavior proves necessary; startup `--no-ai-cache` already bypasses storage.
 - Do not depend on MCP client sampling; MCP remains the evidence/tool integration.
 - Separate fact/evidence and model-opinion presentation.
+
+Optional follow-up: add a browser preference if per-request no-cache behavior proves necessary; startup `--no-ai-cache` already bypasses storage.
 
 ## Phase 5: official documents
 

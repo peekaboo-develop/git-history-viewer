@@ -67,7 +67,7 @@ Canonical AI evidence is capped at 16 KiB and provider wire JSON at 48 KiB to ac
 
 - Cross-platform tests on Node 22 and 24.
 - MCP conformance and stdout-purity tests.
-- Packed-tarball inspection and smoke tests.
-- Dependency/license audit.
+- Packed-tarball installation plus CLI, authenticated Web, and metadata MCP smoke tests.
+- Dependency vulnerability and production-license allowlist audits.
 - No personal paths, session tokens, keys, or repository samples in artifacts.
 - Checksums and rollback instructions for releases.
