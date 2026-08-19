@@ -5,6 +5,7 @@ import { asViewerError } from '../core/errors.js';
 import type { RepositoryReader } from '../core/repository.js';
 import { SCHEMA_VERSION, success, type Envelope } from '../schema/types.js';
 import { MCP_RESOURCES } from './guides.js';
+import { PACKAGE_VERSION } from '../version.js';
 
 const annotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 const outputSchema = {
@@ -25,7 +26,7 @@ async function result<T>(reader: RepositoryReader, operation: () => Promise<T>) 
 }
 
 export async function runMcpServer(reader: RepositoryReader): Promise<void> {
-  const server = new McpServer({ name: 'git-history-viewer', version: '0.1.0-alpha.0' });
+  const server = new McpServer({ name: 'git-history-viewer', version: PACKAGE_VERSION });
   for (const resource of MCP_RESOURCES) {
     server.registerResource(resource.name, resource.uri, { title: resource.title, description: resource.description, mimeType: resource.mimeType }, async () => ({ contents: [{ uri: resource.uri, mimeType: resource.mimeType, text: resource.text }] }));
   }

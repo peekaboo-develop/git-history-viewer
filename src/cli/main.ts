@@ -11,6 +11,7 @@ import { openRepository, type RepositoryOptions } from '../core/repository.js';
 import { runMcpServer } from '../mcp/server.js';
 import { SCHEMA_VERSION, success, type ContentPolicy } from '../schema/types.js';
 import { createViewerServer } from '../web/server.js';
+import { PACKAGE_VERSION } from '../version.js';
 
 interface Parsed { command: string; positional: string[]; options: Map<string, string[]>; flags: Set<string> }
 function parse(argv: string[]): Parsed {
@@ -52,7 +53,7 @@ function help(): void {
 async function main(): Promise<void> {
   const parsed = parse(process.argv.slice(2));
   if (parsed.command === 'help' || parsed.flags.has('help')) return help();
-  if (parsed.command === 'version') return void process.stdout.write('0.1.0-alpha.0\n');
+  if (parsed.command === 'version') return void process.stdout.write(`${PACKAGE_VERSION}\n`);
   if (parsed.command === 'config') {
     if (parsed.options.size > 0 || parsed.positional.length !== 1 || [...parsed.flags].some((flag) => flag !== 'json')) throw new ViewerError('INVALID_ARGUMENT', 'Unsupported config command argument.');
     const action = parsed.positional[0]; const configPath = defaultAiConfigPath();

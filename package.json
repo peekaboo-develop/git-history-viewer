@@ -1,6 +1,6 @@
 {
   "name": "@peekaboo-develop/git-history-viewer",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "A local-first, read-only Git history viewer and MCP server",
   "license": "Apache-2.0",
   "author": "Takuto Makabe",

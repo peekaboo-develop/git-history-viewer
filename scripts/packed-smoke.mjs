@@ -81,6 +81,9 @@ async function stopWeb(child) {
 
 try {
   await createFixture();
+  const sourceManifest = JSON.parse(await fs.readFile(path.join(projectRoot, 'package.json'), 'utf8'));
+  const sourceLock = JSON.parse(await fs.readFile(path.join(projectRoot, 'package-lock.json'), 'utf8'));
+  assert.equal(sourceLock.packages?.['']?.version, sourceManifest.version, 'package-lock root version must match package.json');
   const packed = await npmCommand(['pack', '--ignore-scripts', '--json', '--silent', '--pack-destination', tempRoot], { cwd: projectRoot });
   const report = JSON.parse(packed.stdout)[0];
   assert.equal(report.name, '@peekaboo-develop/git-history-viewer');
@@ -105,7 +108,7 @@ try {
   assert.deepEqual(manifest.publishConfig, { access: 'public', tag: 'alpha', provenance: true });
 
   const version = await command(process.execPath, [bin, 'version']);
-  assert.equal(version.stdout.trim(), '0.1.0-alpha.0');
+  assert.equal(version.stdout.trim(), manifest.version);
   const inspected = await command(process.execPath, [bin, 'inspect', 'repository', '--repo', fixtureRoot, '--json']);
   const repository = JSON.parse(inspected.stdout);
   assert.equal(repository.schemaVersion, '1');
@@ -131,6 +134,7 @@ try {
   const transport = new StdioClientTransport({ command: process.execPath, args: [bin, 'mcp', '--repo', fixtureRoot, '--content-policy', 'metadata'], stderr: 'pipe' });
   try {
     await client.connect(transport);
+    assert.equal(client.getServerVersion()?.version, manifest.version);
     const tools = await client.listTools();
     assert.ok(tools.tools.some((item) => item.name === 'git_history_repository'));
     assert.ok(!tools.tools.some((item) => item.name === 'git_history_get_commit_patch'));
