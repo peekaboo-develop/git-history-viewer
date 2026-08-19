@@ -26,6 +26,6 @@ Run `npm run test:pack` for changes to the CLI, Web server, MCP server, package 
 
 ## Reporting vulnerabilities
 
-Do not open a public issue for a suspected vulnerability. This project must configure and publish a private reporting address before its first public release. Until then, public release remains blocked.
+Do not open a public issue for a suspected vulnerability. Use [GitHub Private Vulnerability Reporting](https://github.com/peekaboo-develop/git-history-viewer/security/advisories/new).
 
 Contributor-license or DCO terms have not been adopted. Do not infer additional contributor terms from this file.

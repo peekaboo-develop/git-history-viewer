@@ -2,7 +2,30 @@
 
 A free, local-first, read-only Git history graph for the browser, CLI, and MCP clients.
 
-> Alpha source tree. It has not been published to npm or GitHub yet.
+> Public alpha. Pin an exact version in managed environments.
+
+## Install
+
+Requires Node.js 22 or later and Git 2.40 or later.
+
+```bash
+npm install --global @peekaboo-develop/git-history-viewer@alpha
+```
+
+## Open a repository
+
+```bash
+cd /path/to/repository
+git-history-viewer web .
+```
+
+The viewer opens a loopback-only browser session for that working copy. It does not clone, fetch, pull, push, or modify Git state. Remote-tracking refs show the last state fetched by your existing Git workflow.
+
+For MCP setup, start with metadata-only access:
+
+```bash
+git-history-viewer mcp --repo /absolute/path/to/repository --content-policy metadata
+```
 
 ## Development
 

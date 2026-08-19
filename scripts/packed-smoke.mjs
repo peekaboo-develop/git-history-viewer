@@ -83,6 +83,9 @@ try {
   assert.ok(paths.includes('docs/RELEASING.md'));
   assert.ok(paths.includes('integrations/codex-skill/SKILL.md'));
   assert.ok(paths.includes('CONTRIBUTING.md'));
+  assert.ok(paths.includes('NOTICE'));
+  assert.ok(paths.includes('third_party/gh-pr-graph-LICENSE'));
+  assert.ok(paths.includes('third_party/le-git-graph-LICENSE'));
   assert.ok(paths.every((item) => !item.startsWith('src/') && !item.startsWith('test/') && !item.startsWith('scripts/')));
 
   const tarball = path.join(tempRoot, report.filename);
@@ -90,6 +93,10 @@ try {
   const packageRoot = path.join(installRoot, 'node_modules', '@peekaboo-develop', 'git-history-viewer');
   const bin = path.join(packageRoot, 'bin', 'git-history-viewer.mjs');
   await scanPackage(packageRoot);
+  const manifest = JSON.parse(await fs.readFile(path.join(packageRoot, 'package.json'), 'utf8'));
+  assert.equal(manifest.author, 'Takuto Makabe');
+  assert.equal(manifest.repository.url, 'git+https://github.com/peekaboo-develop/git-history-viewer.git');
+  assert.deepEqual(manifest.publishConfig, { access: 'public', tag: 'alpha', provenance: true });
 
   const version = await command(process.execPath, [bin, 'version']);
   assert.equal(version.stdout.trim(), '0.1.0-alpha.0');

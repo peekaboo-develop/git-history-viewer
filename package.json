@@ -3,6 +3,26 @@
   "version": "0.1.0-alpha.0",
   "description": "A local-first, read-only Git history viewer and MCP server",
   "license": "Apache-2.0",
+  "author": "Takuto Makabe",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/peekaboo-develop/git-history-viewer.git"
+  },
+  "homepage": "https://github.com/peekaboo-develop/git-history-viewer#readme",
+  "bugs": {
+    "url": "https://github.com/peekaboo-develop/git-history-viewer/issues"
+  },
+  "keywords": [
+    "git",
+    "history",
+    "graph",
+    "mcp"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha",
+    "provenance": true
+  },
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -16,7 +36,9 @@
     "public",
     "docs",
     "integrations/codex-skill",
+    "third_party",
     "LICENSE",
+    "NOTICE",
     "CONTRIBUTING.md",
     "README.md",
     "PRIVACY.md",

@@ -1,0 +1,37 @@
+name: Publish alpha
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Exact release tag to publish
+        required: true
+        default: v0.1.0-alpha.0
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - name: Verify exact version tag
+        run: node -e "const p=require('./package.json');if(process.env.RELEASE_REF!=='v'+p.version)process.exit(1)"
+        env:
+          RELEASE_REF: ${{ inputs.ref }}
+      - run: npm ci
+      - run: npm test
+      - run: npm run license:check
+      - run: npm run test:pack
+      - run: npm publish --access public --tag alpha --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

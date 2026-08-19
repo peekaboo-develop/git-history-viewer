@@ -64,7 +64,7 @@ See [ROADMAP.md](ROADMAP.md) for sequencing and security gates.
 - CLI binary: `git-history-viewer`.
 - Runtime: Node.js 22 or later and Git 2.40 or later.
 - Initial channels: public npm package and GitHub source/releases.
-- License: Apache-2.0. The legal copyright holder must be named before public release.
+- License: Apache-2.0. Copyright holder: Takuto Makabe.
 - No telemetry.
 
 The existing personal Codex skill remains installed until package parity is proven. The public package becomes the implementation source of truth; the skill becomes a thin launcher and never downloads `latest` automatically.
@@ -131,4 +131,4 @@ The local AI-result cache is content-addressed, bounded, dependency-free, and st
 - Secrets or personal absolute paths in the packed npm artifact.
 - Packed-package CLI/Web/MCP smoke test failure.
 
-Public release additionally requires confirmation that the npm scope is controlled, the legal copyright holder is named, and a provenance audit confirms that third-party code or assets preserve their required notices.
+Public release additionally requires confirmation that the npm scope is controlled, GitHub Private Vulnerability Reporting is enabled, and a provenance audit confirms that third-party code or assets preserve their required notices.
