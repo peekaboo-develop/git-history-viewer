@@ -9,6 +9,12 @@ Releases are deliberate external actions. Preparing and testing an artifact does
 - The npm scope and GitHub destination are controlled by the intended publisher.
 - `npm audit --omit=dev`, the cross-platform CI matrix, and manual browser QA pass.
 
+For the first npm publication, use a short-lived granular access token stored as
+the GitHub Actions secret `NPM_TOKEN`. After the package exists, configure npm
+Trusted Publishing for `peekaboo-develop/git-history-viewer` and `publish.yml`,
+remove the Actions secret, and disallow token-based publishing. Do not copy a
+developer login token into CI.
+
 ## Build and verify
 
 ```bash
