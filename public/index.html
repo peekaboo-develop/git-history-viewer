@@ -20,6 +20,19 @@
   <main>
     <section class="history" aria-label="Repository history">
       <div id="notice"></div>
+      <div id="loading" class="loading-state" role="status" aria-live="polite" aria-atomic="true">
+        <div class="loading-card">
+          <div class="loading-graph" aria-hidden="true">
+            <i></i><i></i><i></i><b></b><b></b><b></b>
+          </div>
+          <div class="loading-copy">
+            <strong id="loading-title">リポジトリを読み込んでいます</strong>
+            <span id="loading-detail">Git履歴とブランチを解析しています。</span>
+          </div>
+          <div class="loading-progress" aria-hidden="true"></div>
+          <button id="loading-retry" type="button" hidden>再読み込み</button>
+        </div>
+      </div>
       <div id="commits" aria-label="Commit list"></div>
       <div id="topology" hidden aria-label="Branch topology">
         <div class="topology-heading">

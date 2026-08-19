@@ -142,6 +142,8 @@ export class RepositoryReader {
   readonly excludes: string[];
   private readonly git: GitRunner;
   private readonly cursorSecret = randomBytes(32);
+  private commitSnapshot: { generation: string; values: CommitSummary[] } | null = null;
+  private commitSnapshotPending: { generation: string; promise: Promise<CommitSummary[]>; token: symbol } | null = null;
 
   private constructor(root: string, options: RepositoryOptions) {
     this.root = root; this.policy = options.contentPolicy ?? 'metadata'; this.excludes = options.excludePaths ?? [];
@@ -193,6 +195,26 @@ export class RepositoryReader {
     return new Set(result.code === 0 ? result.stdout.toString('utf8').split('\n').filter((oid) => OID_PATTERN.test(oid)) : []);
   }
 
+  private async commitValues(generation: string): Promise<CommitSummary[]> {
+    if (this.commitSnapshot?.generation === generation) return this.commitSnapshot.values;
+    if (this.commitSnapshotPending?.generation === generation) return this.commitSnapshotPending.promise;
+
+    const token = Symbol('commit-snapshot');
+    const promise = (async () => {
+      const refs = await this.refs();
+      const unpushed = await this.unpushedSet();
+      const result = await this.git.run('graph', ['log', '--branches', '--remotes', '--tags', 'HEAD', '--topo-order', '--date-order', '-z', `--max-count=${MAX_COMMITS}`, '--format=%H%x00%P%x00%an%x00%aI%x00%s'], true);
+      const values = result.code === 0 ? parseGraph(result.stdout, refs, unpushed) : [];
+      if (this.commitSnapshotPending?.token === token) this.commitSnapshot = { generation, values };
+      return values;
+    })();
+    this.commitSnapshotPending = { generation, promise, token };
+    try { return await promise; }
+    finally {
+      if (this.commitSnapshotPending?.token === token) this.commitSnapshotPending = null;
+    }
+  }
+
   private encodeCursor(operation: string, generation: string, offset: number): string {
     const payload = Buffer.from(JSON.stringify({ version: 1, generation, operation, offset, filterHash: 'v1:all' })).toString('base64url');
     const signature = createHmac('sha256', this.cursorSecret).update(payload).digest('base64url');
@@ -216,9 +238,7 @@ export class RepositoryReader {
   async commits(limit = 50, cursor: string | null = null): Promise<Page<CommitSummary>> {
     safeLimit(limit);
     const generation = await this.generation(); const offset = this.decodeCursor(cursor, 'commits', generation);
-    const refs = await this.refs(); const unpushed = await this.unpushedSet();
-    const result = await this.git.run('graph', ['log', '--branches', '--remotes', '--tags', 'HEAD', '--topo-order', '--date-order', '-z', `--max-count=${MAX_COMMITS}`, '--format=%H%x00%P%x00%an%x00%aI%x00%s'], true);
-    const values = result.code === 0 ? parseGraph(result.stdout, refs, unpushed) : [];
+    const values = await this.commitValues(generation);
     const end = Math.min(values.length, offset + limit); const truncated = end < values.length;
     return { items: values.slice(offset, end), truncated, omittedCount: truncated ? (values.length === MAX_COMMITS ? null : values.length - end) : 0, nextCursor: truncated ? this.encodeCursor('commits', generation, end) : null };
   }
