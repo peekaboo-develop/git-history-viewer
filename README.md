@@ -73,6 +73,6 @@ The AI-result cache uses bounded, sharded JSON files in the operating system's u
 
 The commit detail pane can recommend up to two version-neutral links from a compiled registry of official documentation for strong path markers such as GitHub Actions workflows, Docker/Compose files, TSConfig, Vite config, and Vue SFCs. Link display performs no network access. A separate button can fetch bounded excerpts directly from those fixed official URLs through a DNS-rebinding-resistant, pinned-IP HTTPS transport. The destination can infer the detected technology, but repository names, paths, commits, messages, cookies, credentials, and referrers are not sent. Redirects are rejected. When AI is enabled, another separate preview and confirmation can send the displayed excerpts plus opaque citation IDs to the selected provider; official URLs and titles are never sent to the model and are mapped back only by the server. Version detection remains unavailable.
 
-See `docs/PRODUCT_SPEC.md`, `docs/ARCHITECTURE.md`, `docs/MCP.md`, and `docs/SECURITY.md` for the normative design.
+See `docs/PRODUCT_SPEC.md`, `docs/ARCHITECTURE.md`, `docs/MCP.md`, `docs/SECURITY.md`, and `docs/ROADMAP.md` for the normative design and planned remote-environment support.
 
 Release preparation and rollback are documented in `docs/RELEASING.md`. Building an artifact does not authorize publishing it.

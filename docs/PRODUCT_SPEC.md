@@ -42,8 +42,13 @@ The product does not mutate a repository, contact remotes, or send repository co
 - Optional per-request no-cache preference in the Web UI.
 - Separately consented manifest reading for reliable dependency-version detection.
 - Standalone binaries and native packaging after Node/npm adoption is validated.
+- Documented SSH-tunnel operation for repositories whose working copy exists on a remote machine or VM.
+- A later, separately reviewed SSH connection profile that launches the viewer remotely without storing SSH credentials.
+- Git-hosting API integration only after concrete demand and a separate credential, network, and privacy design.
 
-### Non-goals
+See [ROADMAP.md](ROADMAP.md) for sequencing and security gates.
+
+### Version 0.1 non-goals
 
 - Git writes: checkout, commit, merge, rebase, reset, stash, clean, or file editing.
 - Remote operations: fetch, pull, push, GitHub OAuth, or PAT storage.

@@ -62,6 +62,17 @@ Optional follow-up: add a browser preference if per-request no-cache behavior pr
 - Grounded AI implemented as a separate preview/execute API: excerpts and server-owned citation IDs are sent only after a second confirmation; model citations are validated and mapped back to compiled-registry links.
 - Do not crawl automatically or accept arbitrary URLs.
 
+## Phase 6: remote development environments
+
+Defer implementation until after the local-only v0.1 release. Follow the staged plan in `ROADMAP.md`:
+
+1. Document and test manual SSH port forwarding without changing the local trust boundary.
+2. Add MCP-over-SSH guidance only after stdout purity, version compatibility, and SSH-banner behavior are verified.
+3. Consider managed SSH profiles only after command construction, host verification, process cleanup, port ownership, and credential non-storage have dedicated tests and security review.
+4. Keep Git fetch/pull/push and Git-hosting credentials outside this phase.
+
+Gate: remote access must not weaken loopback binding, introduce arbitrary remote commands, store SSH secrets, bypass host verification, or make network Git operations implicit.
+
 ## Rollback
 
 Keep the current skill and its running server unchanged during implementation. Test the package on another port. If parity fails, stop only the new server and continue using the existing skill. Do not overwrite the skill until the packaged launcher passes its own forward test.
