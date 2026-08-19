@@ -18,6 +18,12 @@ async function command(file, args, options = {}) {
   return exec(file, args, { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, ...options });
 }
 
+async function npmCommand(args, options = {}) {
+  const npmCli = process.env.npm_execpath;
+  if (!npmCli) throw new Error('npm_execpath is required to run the packed smoke test.');
+  return command(process.execPath, [npmCli, ...args], options);
+}
+
 async function createFixture() {
   await fs.mkdir(fixtureRoot, { recursive: true });
   await command('git', ['init', fixtureRoot]);
@@ -75,7 +81,7 @@ async function stopWeb(child) {
 
 try {
   await createFixture();
-  const packed = await command('npm', ['pack', '--ignore-scripts', '--json', '--silent', '--pack-destination', tempRoot], { cwd: projectRoot });
+  const packed = await npmCommand(['pack', '--ignore-scripts', '--json', '--silent', '--pack-destination', tempRoot], { cwd: projectRoot });
   const report = JSON.parse(packed.stdout)[0];
   assert.equal(report.name, '@peekaboo-develop/git-history-viewer');
   const paths = report.files.map((item) => item.path);
@@ -89,7 +95,7 @@ try {
   assert.ok(paths.every((item) => !item.startsWith('src/') && !item.startsWith('test/') && !item.startsWith('scripts/')));
 
   const tarball = path.join(tempRoot, report.filename);
-  await command('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund', '--prefer-offline', '--prefix', installRoot, tarball]);
+  await npmCommand(['install', '--ignore-scripts', '--no-audit', '--no-fund', '--prefer-offline', '--prefix', installRoot, tarball]);
   const packageRoot = path.join(installRoot, 'node_modules', '@peekaboo-develop', 'git-history-viewer');
   const bin = path.join(packageRoot, 'bin', 'git-history-viewer.mjs');
   await scanPackage(packageRoot);
