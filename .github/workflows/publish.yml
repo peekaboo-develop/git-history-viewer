@@ -7,11 +7,6 @@ on:
         description: Exact release tag to publish
         required: true
         default: v0.1.0-alpha.0
-      normalize_only:
-        description: Skip publishing and normalize prerelease dist-tags only
-        required: true
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -37,23 +32,6 @@ jobs:
       - run: npm test
       - run: npm run license:check
       - run: npm run test:pack
-      - if: ${{ !inputs.normalize_only }}
-        run: npm publish --access public --tag alpha --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - name: Normalize alpha dist-tags
-        shell: bash
-        run: |
-          release_package="$(node -p "require('./package.json').name")"
-          release_version="$(node -p "require('./package.json').version")"
-          if [[ "$release_version" != *-* ]]; then
-            echo "Refusing to normalize a stable version as alpha." >&2
-            exit 1
-          fi
-          npm dist-tag add "${release_package}@${release_version}" alpha
-          release_latest="$(npm view "$release_package" dist-tags.latest 2>/dev/null || true)"
-          if [[ "$release_latest" == "$release_version" ]]; then
-            npm dist-tag rm "$release_package" latest
-          fi
+      - run: npm publish --access public --tag alpha --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
