@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="ja">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -11,11 +11,11 @@
 <body>
   <header>
     <div class="identity"><strong id="repo">Git History</strong><span id="branch"></span></div>
-    <nav class="view-switcher" aria-label="History view">
-      <button id="commits-tab" class="view-tab active" type="button" aria-selected="true">Commits</button>
-      <button id="topology-tab" class="view-tab" type="button" aria-selected="false">Topology</button>
+    <nav class="view-switcher" aria-label="履歴の表示方法">
+      <button id="commits-tab" class="view-tab active tooltip tooltip-bottom" type="button" aria-selected="true" data-tooltip="時系列のコミット一覧を表示">Commits</button>
+      <button id="topology-tab" class="view-tab tooltip tooltip-bottom" type="button" aria-selected="false" data-tooltip="ブランチ・タグ・マージの要点を俯瞰">Topology</button>
     </nav>
-    <div class="actions"><input id="search" type="search" placeholder="Search commits" aria-label="Search commits"><button id="connections-open" type="button">AI接続</button><button id="theme" type="button" aria-label="Toggle theme" title="Toggle theme">◐</button></div>
+    <div class="actions"><span class="tooltip tooltip-bottom" data-tooltip="件名・作者・OID・ブランチ名で絞り込み"><input id="search" type="search" placeholder="コミットを検索" aria-label="コミットを検索"></span><button id="connections-open" class="tooltip tooltip-bottom" type="button" data-tooltip="MCP設定ガイドを開く">AI接続</button><button id="theme" class="tooltip tooltip-bottom tooltip-right" type="button" aria-label="表示テーマを切り替える" data-tooltip="表示テーマを切り替える">◐</button></div>
   </header>
   <main>
     <section class="history" aria-label="Repository history">
@@ -44,7 +44,30 @@
         </div>
       </div>
     </section>
-    <aside id="detail"><p class="muted">Select a commit to inspect it.</p></aside>
+    <aside id="detail">
+      <section class="getting-started" aria-labelledby="getting-started-title">
+        <div class="guide-graph-mark" aria-hidden="true">
+          <svg viewBox="0 0 112 70"><path d="M12 12v46M12 31h28c13 0 13 27 27 27h32M40 31h59"/><circle cx="12" cy="12" r="5"/><circle cx="40" cy="31" r="5"/><circle cx="67" cy="58" r="5"/><circle cx="99" cy="31" r="5"/><circle cx="99" cy="58" r="5"/></svg>
+        </div>
+        <span class="eyebrow">QUICK START</span>
+        <h2 id="getting-started-title">Git履歴を読み解く</h2>
+        <p class="guide-intro">左の履歴からコミットを選ぶと、本文と変更ファイルをこの場所で確認できます。</p>
+        <ol class="guide-steps">
+          <li><span>1</span><div><strong>コミットを選ぶ</strong><p>件名・作者・日時を見て、調べたい行をクリックします。</p></div></li>
+          <li><span>2</span><div><strong>変更内容を確認</strong><p>コミット本文と変更されたファイルを右カラムで確認します。</p></div></li>
+          <li><span>3</span><div><strong>日本語で理解する</strong><p>AIプロファイル有効時は画面内で説明を生成。MCP利用時は依頼文をコピーして接続先AIで確認します。</p></div></li>
+        </ol>
+        <div class="guide-section">
+          <h3>表示の見かた</h3>
+          <dl class="history-legend">
+            <div><dt><span class="legend-ref">branch / tag</span></dt><dd>そのコミットを指すブランチやタグ</dd></div>
+            <div><dt><span class="legend-ref">unpushed</span></dt><dd>取得済みのremote-tracking refに含まれないローカルコミット</dd></div>
+            <div><dt><span class="legend-line"></span></dt><dd>親子関係。分岐やマージは線の接続で追えます</dd></div>
+          </dl>
+        </div>
+        <div class="privacy-note"><strong>ローカル・読み取り専用</strong><p>自動でfetch・push・checkoutはしません。remote表示は最後にローカルへ取得した状態です。</p></div>
+      </section>
+    </aside>
   </main>
   <dialog id="connections-dialog" aria-labelledby="connections-title">
     <div class="dialog-heading"><div><span class="eyebrow">MCP SETUP</span><h2 id="connections-title">AIツールと接続</h2></div><button id="connections-close" type="button" aria-label="Close">×</button></div>
