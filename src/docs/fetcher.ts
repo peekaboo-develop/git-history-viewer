@@ -59,7 +59,6 @@ export class PinnedHttpsTransport implements FetchTransport {
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => reject(new ViewerError('PROVIDER_TIMEOUT', 'The official document DNS lookup timed out.')), this.dnsTimeoutMs);
-      timer.unref();
     });
     let addresses: Array<{ address: string; family: number }>;
     try { addresses = await Promise.race([this.resolveAddresses(url.hostname), timeout]); }
@@ -82,7 +81,7 @@ export class PinnedHttpsTransport implements FetchTransport {
         response.on('end', () => { if (!settled) { settled = true; clearTimeout(totalTimer); resolve({ status, contentType, contentEncoding, body: Buffer.concat(chunks) }); } });
         response.on('error', (error) => { if (!settled) { settled = true; clearTimeout(totalTimer); reject(new ViewerError('PROVIDER_UNAVAILABLE', 'The official document could not be read.', { cause: error })); } });
       });
-      const totalTimer = setTimeout(() => request.destroy(new ViewerError('PROVIDER_TIMEOUT', 'The official document request timed out.')), 10_000); totalTimer.unref();
+      const totalTimer = setTimeout(() => request.destroy(new ViewerError('PROVIDER_TIMEOUT', 'The official document request timed out.')), 10_000);
       request.setTimeout(5_000, () => request.destroy(new ViewerError('PROVIDER_TIMEOUT', 'The official document connection timed out.')));
       request.on('socket', (socket) => socket.once('secureConnect', () => { if (!socket.remoteAddress || !approved.has(socket.remoteAddress)) request.destroy(new ViewerError('PROVIDER_UNAVAILABLE', 'The official document connection was rejected.')); }));
       request.on('error', (error) => { if (!settled) { settled = true; clearTimeout(totalTimer); reject(error instanceof ViewerError ? error : new ViewerError('PROVIDER_UNAVAILABLE', 'The official document request failed.', { cause: error })); } });
