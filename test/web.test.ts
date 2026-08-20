@@ -27,7 +27,7 @@ test('web server binds loopback and enforces session, host, origin, and method',
   assert.equal(topology.status, 200); assert.match(topology.body, /buildTopology/u); assert.doesNotMatch(topology.body, /innerHTML/u);
   const filters = await request(port, '/filters.js', { headers: { Cookie: session } });
   assert.equal(filters.status, 200); assert.match(filters.body, /relatedHistory/u); assert.doesNotMatch(filters.body, /innerHTML/u);
-  const app = await request(port, '/app.js', { headers: { Cookie: session } }); assert.equal(app.status, 200); assert.match(app.body, /コミット情報/u); assert.match(app.body, /公式資料の抜粋/u); assert.match(app.body, /対象.*除外.*一部省略/u); assert.match(app.body, /STALE_CURSOR/u); assert.match(app.body, /最新の履歴で読み直しています/u);
+  const app = await request(port, '/app.js', { headers: { Cookie: session } }); assert.equal(app.status, 200); assert.match(app.body, /コミット情報/u); assert.match(app.body, /公式資料の抜粋/u); assert.match(app.body, /対象.*除外.*一部省略/u); assert.match(app.body, /STALE_CURSOR/u); assert.match(app.body, /最新の履歴で読み直しています/u); assert.match(app.body, /maxRank-node\.rank/u);
   const styles = await request(port, '/styles.css', { headers: { Cookie: session } }); assert.equal(styles.status, 200); assert.match(styles.body, /loading-progress/u); assert.match(styles.body, /prefers-reduced-motion/u); assert.match(styles.body, /getting-started/u); assert.match(styles.body, /tooltip:focus-visible/u);
   const guides = await request(port, '/api/v1/mcp/guides', { headers: { Cookie: session } });
   assert.equal(guides.status, 200); assert.match(guides.body, /codex mcp add/u); assert.match(guides.body, /FULL_COMMIT_OID/u);
