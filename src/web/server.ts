@@ -122,8 +122,19 @@ export async function createViewerServer(reader: RepositoryReader, options: View
         const warnings = data.warning ? [{ code: 'CACHE_WRITE_FAILED', message: data.warning, details: {} }] : [];
         return send(response, 200, JSON.stringify(success(await generation(), data, warnings)), 'application/json; charset=utf-8');
       }
+      const asset = staticRoutes.get(url.pathname);
+      if (asset) return send(response, 200, await readFile(asset[0]), asset[1]);
       const gen = await generation();
       const json = (data: unknown) => send(response, 200, JSON.stringify(success(gen, data)), 'application/json; charset=utf-8');
+      if (url.pathname === '/api/v1/bootstrap') {
+        if (url.search) throw new ViewerError('INVALID_ARGUMENT', 'Bootstrap does not accept query parameters.');
+        const [repository, worktrees] = await Promise.all([reader.repository(), reader.worktrees()]);
+        return json({
+          repository, worktrees: worktrees.items,
+          ai: { ...(options.ai?.capabilities() ?? { enabled: false }), csrfToken },
+          mcp: { guides: MCP_CLIENT_GUIDES, resources: MCP_RESOURCES.map(({ uri, title, description, mimeType }) => ({ uri, title, description, mimeType })), commitPromptTemplate: commitPrompt('{FULL_COMMIT_OID}') },
+        });
+      }
       if (url.pathname === '/api/v1/ai/capabilities') return json({ ...(options.ai?.capabilities() ?? { enabled: false }), csrfToken });
       if (url.pathname === '/api/v1/mcp/guides') {
         if (url.search) throw new ViewerError('INVALID_ARGUMENT', 'MCP guides do not accept query parameters.');
@@ -135,7 +146,7 @@ export async function createViewerServer(reader: RepositoryReader, options: View
       if (url.pathname === '/api/v1/commits') {
         const limit = url.searchParams.has('limit') ? Number(url.searchParams.get('limit')) : options.limit;
         if ([...url.searchParams.keys()].some((key) => !['limit', 'cursor'].includes(key))) throw new ViewerError('INVALID_ARGUMENT', 'Unsupported query parameter.');
-        return json(await reader.commits(limit, url.searchParams.get('cursor')));
+        return json(await reader.commits(limit, url.searchParams.get('cursor'), gen));
       }
       if (url.pathname === '/api/v1/worktrees') return json(await reader.worktrees());
       if (url.pathname === '/api/v1/unpushed') return json(await reader.unpushed(url.searchParams.has('limit') ? Number(url.searchParams.get('limit')) : 50));
@@ -162,8 +173,6 @@ export async function createViewerServer(reader: RepositoryReader, options: View
       }
       const commit = url.pathname.match(/^\/api\/v1\/commits\/([0-9a-f]+)$/u);
       if (commit) return json(await reader.commit(commit[1] ?? ''));
-      const asset = staticRoutes.get(url.pathname);
-      if (asset) return send(response, 200, await readFile(asset[0]), asset[1]);
       return send(response, 404, 'Not found.');
     } catch (error) {
       const known = asViewerError(error);

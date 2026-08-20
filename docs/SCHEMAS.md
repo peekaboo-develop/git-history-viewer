@@ -161,7 +161,7 @@ MCP metadata policy returns `Status.files: null` and `CommitChanges.pathsInclude
 
 ## Limits and ordering
 
-- Commit page: default 50, maximum 200; materialized graph maximum 500.
+- Commit page: default 50, maximum 200; paged graph window maximum 500. The Web UI initially requests 100 and extends its search/filter index in 100-commit pages.
 - Refs: maximum 5,000, sorted by kind then name after parsing.
 - Worktrees: maximum 1,000, current first then display name.
 - Status files: maximum 2,000.
@@ -200,6 +200,7 @@ Before 1.0, compatible additions may add optional fields. Removing fields, chang
 | Operation | `Envelope<T>.data` type |
 |---|---|
 | repository | `Repository` |
+| Web bootstrap | `{ repository: Repository; worktrees: Worktree[]; ai: AiCapabilities; mcp: McpGuides }` |
 | status | `Status` |
 | refs | `Page<Ref>` |
 | commits | `Page<CommitSummary>` |

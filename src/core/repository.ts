@@ -142,8 +142,8 @@ export class RepositoryReader {
   readonly excludes: string[];
   private readonly git: GitRunner;
   private readonly cursorSecret = randomBytes(32);
-  private commitSnapshot: { generation: string; values: CommitSummary[] } | null = null;
-  private commitSnapshotPending: { generation: string; promise: Promise<CommitSummary[]>; token: symbol } | null = null;
+  private commitContext: { generation: string; refs: GitRef[]; unpushed: Set<string> } | null = null;
+  private commitContextPending: { generation: string; promise: Promise<{ refs: GitRef[]; unpushed: Set<string> }>; token: symbol } | null = null;
 
   private constructor(root: string, options: RepositoryOptions) {
     this.root = root; this.policy = options.contentPolicy ?? 'metadata'; this.excludes = options.excludePaths ?? [];
@@ -195,24 +195,33 @@ export class RepositoryReader {
     return new Set(result.code === 0 ? result.stdout.toString('utf8').split('\n').filter((oid) => OID_PATTERN.test(oid)) : []);
   }
 
-  private async commitValues(generation: string): Promise<CommitSummary[]> {
-    if (this.commitSnapshot?.generation === generation) return this.commitSnapshot.values;
-    if (this.commitSnapshotPending?.generation === generation) return this.commitSnapshotPending.promise;
+  private async contextForCommits(generation: string): Promise<{ refs: GitRef[]; unpushed: Set<string> }> {
+    if (this.commitContext?.generation === generation) return this.commitContext;
+    if (this.commitContextPending?.generation === generation) return this.commitContextPending.promise;
 
-    const token = Symbol('commit-snapshot');
+    const token = Symbol('commit-context');
     const promise = (async () => {
-      const refs = await this.refs();
-      const unpushed = await this.unpushedSet();
-      const result = await this.git.run('graph', ['log', '--branches', '--remotes', '--tags', 'HEAD', '--topo-order', '--date-order', '-z', `--max-count=${MAX_COMMITS}`, '--format=%H%x00%P%x00%an%x00%aI%x00%s'], true);
-      const values = result.code === 0 ? parseGraph(result.stdout, refs, unpushed) : [];
-      if (this.commitSnapshotPending?.token === token) this.commitSnapshot = { generation, values };
-      return values;
+      const [refs, unpushed] = await Promise.all([this.refs(), this.unpushedSet()]);
+      const context = { refs, unpushed };
+      if (this.commitContextPending?.token === token) this.commitContext = { generation, ...context };
+      return context;
     })();
-    this.commitSnapshotPending = { generation, promise, token };
+    this.commitContextPending = { generation, promise, token };
     try { return await promise; }
     finally {
-      if (this.commitSnapshotPending?.token === token) this.commitSnapshotPending = null;
+      if (this.commitContextPending?.token === token) this.commitContextPending = null;
     }
+  }
+
+  private async commitPage(generation: string, offset: number, limit: number): Promise<CommitSummary[]> {
+    const { refs, unpushed } = await this.contextForCommits(generation);
+    const maximum = Math.min(limit + 1, MAX_COMMITS - offset + 1);
+    if (maximum <= 0) return [];
+    const result = await this.git.run('graph', [
+      'log', '--branches', '--remotes', '--tags', 'HEAD', '--topo-order', '--date-order', '-z',
+      `--skip=${offset}`, `--max-count=${maximum}`, '--format=%H%x00%P%x00%an%x00%aI%x00%s',
+    ], true);
+    return result.code === 0 ? parseGraph(result.stdout, refs, unpushed) : [];
   }
 
   private encodeCursor(operation: string, generation: string, offset: number): string {
@@ -235,12 +244,16 @@ export class RepositoryReader {
     return value.offset ?? 0;
   }
 
-  async commits(limit = 50, cursor: string | null = null): Promise<Page<CommitSummary>> {
+  async commits(limit = 50, cursor: string | null = null, knownGeneration: string | null = null): Promise<Page<CommitSummary>> {
     safeLimit(limit);
-    const generation = await this.generation(); const offset = this.decodeCursor(cursor, 'commits', generation);
-    const values = await this.commitValues(generation);
-    const end = Math.min(values.length, offset + limit); const truncated = end < values.length;
-    return { items: values.slice(offset, end), truncated, omittedCount: truncated ? (values.length === MAX_COMMITS ? null : values.length - end) : 0, nextCursor: truncated ? this.encodeCursor('commits', generation, end) : null };
+    const generation = knownGeneration ?? await this.generation(); const offset = this.decodeCursor(cursor, 'commits', generation);
+    if (offset > MAX_COMMITS) throw new ViewerError('INVALID_ARGUMENT', 'Cursor exceeds the commit history limit.');
+    const values = await this.commitPage(generation, offset, limit);
+    const items = values.slice(0, Math.min(limit, Math.max(0, MAX_COMMITS - offset)));
+    const hasMore = values.length > items.length;
+    const nextOffset = offset + items.length;
+    const nextCursor = hasMore && nextOffset < MAX_COMMITS ? this.encodeCursor('commits', generation, nextOffset) : null;
+    return { items, truncated: hasMore, omittedCount: hasMore ? null : 0, nextCursor };
   }
 
   async unpushed(limit = 50): Promise<Page<CommitSummary>> {

@@ -102,7 +102,9 @@ The only version 0.1 operations are `repoInfo`, `head`, `refs`, `status`, `workt
 
 If untracked status alone would exceed the fingerprint cap, generation falls back to porcelain status with `--untracked-files=no` and emits `UNTRACKED_FINGERPRINT_OMITTED`. Pure untracked-file changes may then miss a generation update, while explicit status reads still return a bounded/truncated result.
 
-Pagination is over a materialized topological result for one generation. The cursor contains a version, generation, operation, and numeric next offset, authenticated with a process-local secret. A last OID alone is not a valid topological resume point. A cursor from another state returns `STALE_CURSOR`.
+Pagination replays the same topological/date-ordered Git query for one generation using a numeric offset and a bounded page size; it does not materialize all 500 commits before returning the first page. Refs and the unpushed set are cached only for that generation. The cursor contains a version, generation, operation, and numeric next offset, authenticated with a process-local secret. A last OID alone is not a valid topological resume point. A cursor from another state returns `STALE_CURSOR`.
+
+The Web UI serves authenticated static assets before calculating repository generation, so the loading state is visible immediately. It requests 100 commits for the first render, then extends the client-side search/filter index in 100-commit idle-time pages up to 500. Repository metadata, worktrees, AI capabilities, and MCP guides hydrate after the first commit page through one `/bootstrap` request. Polling pauses while the background index is being extended. A timed-out background page is retried once without discarding already visible commits. If the 500-commit boundary truncates history, the UI renders an explicit continuation marker instead of presenting the graph as complete.
 
 ## Shared response envelope
 
@@ -172,6 +174,7 @@ Do not spread the parent process environment into Git. Build an allowlist contai
 
 ```text
 GET /api/v1/repository
+GET /api/v1/bootstrap
 GET /api/v1/status
 GET /api/v1/refs
 GET /api/v1/commits

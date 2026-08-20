@@ -30,7 +30,9 @@ test('web server binds loopback and enforces session, host, origin, and method',
   const detail = await request(port, '/detail.js', { headers: { Cookie: session } });
   assert.equal(detail.status, 200); assert.match(detail.body, /commitDescription/u); assert.match(detail.body, /名前変更/u); assert.doesNotMatch(detail.body, /innerHTML/u);
   const app = await request(port, '/app.js', { headers: { Cookie: session } }); assert.equal(app.status, 200); assert.match(app.body, /コミット情報/u); assert.match(app.body, /公式資料の抜粋/u); assert.match(app.body, /対象.*除外.*一部省略/u); assert.match(app.body, /STALE_CURSOR/u); assert.match(app.body, /最新の履歴で読み直しています/u); assert.match(app.body, /maxRank-node\.rank/u); assert.match(app.body, /git-history-detail/u); assert.match(app.body, /detail-closed/u); assert.match(app.body, /AIで理解する/u); assert.match(app.body, /変更ファイル/u); assert.match(app.body, /残り.*件を表示/u); assert.match(app.body, /AIの根拠として公式本文を使う/u);
+  assert.match(app.body, /INITIAL_COMMIT_COUNT=100/u); assert.match(app.body, /COMMIT_PAGE_SIZE=100/u); assert.match(app.body, /SEARCH_INDEX_LIMIT=500/u); assert.match(app.body, /過去の履歴を読み込み中/u); assert.match(app.body, /さらに過去の履歴があります/u);
   const styles = await request(port, '/styles.css', { headers: { Cookie: session } }); assert.equal(styles.status, 200); assert.match(styles.body, /loading-progress/u); assert.match(styles.body, /prefers-reduced-motion/u); assert.match(styles.body, /getting-started/u); assert.match(styles.body, /tooltip:focus-visible/u);
+  assert.match(styles.body, /history-continuation/u); assert.match(styles.body, /continuation-pulse/u);
   const guides = await request(port, '/api/v1/mcp/guides', { headers: { Cookie: session } });
   assert.equal(guides.status, 200); assert.match(guides.body, /codex mcp add/u); assert.match(guides.body, /FULL_COMMIT_OID/u);
   assert.doesNotMatch(guides.body, new RegExp(data.repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'u'));
@@ -38,6 +40,21 @@ test('web server binds loopback and enforces session, host, origin, and method',
   const officialDocs = await request(port, `/api/v1/commits/${data.unsafe}/official-docs`, { headers: { Cookie: session } });
   assert.equal(officialDocs.status, 200); assert.equal(JSON.parse(officialDocs.body).data.networkAccessed, false);
   assert.equal((await request(port, `/api/v1/commits/${data.unsafe}/official-docs?url=https://evil.test`, { headers: { Cookie: session } })).status, 400);
+  const bootstrap = await request(port, '/api/v1/bootstrap', { headers: { Cookie: session } });
+  assert.equal(bootstrap.status, 200); const bootstrapData = JSON.parse(bootstrap.body).data;
+  assert.equal(bootstrapData.repository.name, 'repo'); assert.ok(Array.isArray(bootstrapData.worktrees)); assert.equal(bootstrapData.ai.enabled, false); assert.ok(Array.isArray(bootstrapData.mcp.guides));
+  assert.equal((await request(port, '/api/v1/bootstrap?repo=/tmp/evil', { headers: { Cookie: session } })).status, 400);
+});
+
+test('authenticated static assets do not wait for repository generation', async (t) => {
+  const data = await fixture(); const reader = await openRepository(data.repo);
+  reader.generation = async () => { throw new Error('static assets must not read Git state'); };
+  const viewer = await createViewerServer(reader, { port: 0, limit: 50, token: 'a'.repeat(64) }); await viewer.listen();
+  t.after(() => viewer.close()); const port = viewer.port ?? 0;
+  const login = await request(port, `/?token=${'a'.repeat(64)}`); const session = (login.headers['set-cookie']?.[0] ?? '').split(';')[0] ?? '';
+  assert.equal((await request(port, '/', { headers: { Cookie: session } })).status, 200);
+  assert.equal((await request(port, '/styles.css', { headers: { Cookie: session } })).status, 200);
+  assert.equal((await request(port, '/app.js', { headers: { Cookie: session } })).status, 200);
 });
 
 test('AI POST requires exact origin, CSRF, content type, and bounded requestId body', async (t) => {
