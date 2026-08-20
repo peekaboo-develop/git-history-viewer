@@ -66,7 +66,7 @@ function nearestVisibleAncestors(start: string, visible: Set<string>, commits: M
   return [...found].map(([oid, collapsed]) => ({ oid, collapsed }));
 }
 
-export function buildTopology(commits: CommitSummary[], worktrees: WorktreeInfo[], head: string | null, maxNodes = 120): TopologyModel {
+export function buildTopology(commits: CommitSummary[], worktrees: WorktreeInfo[], head: string | null, maxNodes = 120, focusedOids: ReadonlySet<string> = new Set()): TopologyModel {
   const byOid = new Map(commits.map((commit) => [commit.oid, commit]));
   const worktreesByOid = new Map<string, WorktreeInfo[]>();
   for (const worktree of worktrees) {
@@ -74,11 +74,12 @@ export function buildTopology(commits: CommitSummary[], worktrees: WorktreeInfo[
     const list = worktreesByOid.get(worktree.head) ?? [];
     list.push(worktree); worktreesByOid.set(worktree.head, list);
   }
-  const candidates = commits.filter((commit, index) => index === 0 || commit.oid === head || commit.refs.length > 0 || commit.parents.length !== 1 || worktreesByOid.has(commit.oid));
+  const candidates = commits.filter((commit, index) => index === 0 || commit.oid === head || commit.refs.length > 0 || commit.parents.length !== 1 || worktreesByOid.has(commit.oid) || focusedOids.has(commit.oid));
   const priority = (commit: CommitSummary): number => {
     if (commit.oid === head) return 1_000;
     if (commit.refs.some((ref) => ref.current)) return 980;
     if (worktreesByOid.has(commit.oid)) return 960;
+    if (focusedOids.has(commit.oid)) return 940;
     if (commit.refs.some((ref) => ref.kind === 'local')) return 920;
     if (commit.refs.length > 0) return 880;
     if (commit.parents.length > 1) return 760;

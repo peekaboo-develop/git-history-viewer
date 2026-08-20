@@ -30,3 +30,10 @@ test('topology node limit prioritizes refs and reports limiting', () => {
   assert.equal(graph.nodes.length, 4); assert.equal(graph.limited, true);
   assert.ok(graph.nodes.some((node) => node.oid === commits[0]?.oid)); assert.ok(graph.nodes.some((node) => node.refs.length > 0));
 });
+
+test('topology keeps focused commits that would otherwise be folded', () => {
+  const root = oid('1'); const focused = oid('2'); const tip = oid('3');
+  const commits = [commit(tip, [focused], [ref('main', tip)]), commit(focused, [root]), commit(root, [])];
+  const graph = buildTopology(commits, [], tip, 120, new Set([focused]));
+  assert.ok(graph.nodes.some((node) => node.oid === focused));
+});

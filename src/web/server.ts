@@ -87,6 +87,7 @@ export async function createViewerServer(reader: RepositoryReader, options: View
     ['/app.js', [path.join(publicRoot, 'app.js'), 'text/javascript; charset=utf-8']],
     ['/styles.css', [path.join(publicRoot, 'styles.css'), 'text/css; charset=utf-8']],
     ['/topology.js', [fileURLToPath(new URL('./topology.js', import.meta.url)), 'text/javascript; charset=utf-8']],
+    ['/filters.js', [fileURLToPath(new URL('./filters.js', import.meta.url)), 'text/javascript; charset=utf-8']],
   ] as const);
 
   const server = http.createServer(async (request, response) => {

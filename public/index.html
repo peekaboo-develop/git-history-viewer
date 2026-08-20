@@ -20,6 +20,14 @@
   <main>
     <section class="history" aria-label="Repository history">
       <div id="notice"></div>
+      <div id="history-filters" class="history-filters" hidden>
+        <div class="filter-fields">
+          <label><span>関連ブランチ</span><select id="branch-filter" aria-label="関連ブランチで絞り込み"><option value="">すべてのブランチ</option></select></label>
+          <label><span>作者を強調</span><select id="author-filter" aria-label="作者を強調"><option value="">すべての作者</option></select></label>
+          <button id="filter-clear" type="button">絞り込みを解除</button>
+        </div>
+        <div class="filter-feedback"><strong id="filter-summary"></strong><span>作者・検索の不一致行は、ツリーを切らないよう薄く残します。</span></div>
+      </div>
       <div id="loading" class="loading-state" role="status" aria-live="polite" aria-atomic="true">
         <div class="loading-card">
           <div class="loading-graph" aria-hidden="true">
